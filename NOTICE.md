@@ -15,8 +15,9 @@ payload extracted from a local Armbian build workspace.
 - This repository does not currently declare one blanket license for every file.
 - Patch files remain subject to the licensing terms of the upstream projects
   they modify, including Linux, U-Boot, and Armbian build infrastructure.
-- Broadcom firmware blobs are intentionally not included in this repository due
-  to redistribution and attribution concerns.
+- Broadcom firmware blobs are included in this repository for bring-up
+  convenience. Confirm that redistribution and attribution requirements are
+  acceptable before republishing mirrors or derived packages.
 
 Before wider redistribution, review the licensing requirements for each file
 set you plan to reuse.

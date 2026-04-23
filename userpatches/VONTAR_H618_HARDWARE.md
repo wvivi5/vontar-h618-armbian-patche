@@ -157,10 +157,8 @@ the UART Bluetooth node. Keep these pieces together:
 
 ## Firmware Files
 
-The public repository does not ship Broadcom firmware binaries.
-
-If you have the legal right to use and redistribute the firmware for your
-device, place the payloads under:
+The public repository currently ships the board-specific Broadcom firmware
+payloads under:
 
 ```text
 userpatches/overlay/lib/firmware/brcm/
@@ -175,6 +173,8 @@ brcmfmac4334-sdio.vontar,h618.txt
 ```
 
 The current payload does not require `brcmfmac4334-sdio.vontar,h618.clm_blob`.
+If you republish this repository or redistribute built images, confirm that the
+firmware licensing and attribution requirements are acceptable for your use.
 
 ## Not Included
 

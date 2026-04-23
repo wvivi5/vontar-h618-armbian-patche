@@ -39,9 +39,8 @@ The board configuration currently expects:
 - Linux DTB: `allwinner/sun50i-h618-vontar-h618.dtb`
 - U-Boot branch: `tag:v2025.04`
 
-Optional firmware payloads are not bundled in this repository. If you have the
-right to use and redistribute the Broadcom firmware for your device, place the
-files under `userpatches/overlay/lib/firmware/brcm/` before building.
+Board-specific Broadcom firmware payloads are bundled under
+`userpatches/overlay/lib/firmware/brcm/`.
 
 ## Diagnostics
 
@@ -68,6 +67,7 @@ tracked in git.
 - Kernel DTS patches: `userpatches/kernel/vontar-h618/`
 - U-Boot bring-up patches: `userpatches/u-boot/v2025-sunxi/board_vontar-h618/`
 - Optional MAC override example: `userpatches/overlay/etc/modprobe.d/sunxi_gmac.conf`
+- Board-specific Broadcom firmware payloads: `userpatches/overlay/lib/firmware/brcm/`
 - Hardware profile: `userpatches/VONTAR_H618_HARDWARE.md`
 
 ## Status
@@ -80,6 +80,7 @@ is not an upstream Linux or U-Boot submission series. See
 
 - Local lab logs, build caches, output images, and machine-specific artifacts
   are intentionally excluded.
-- Broadcom firmware blobs are intentionally not included in git.
+- Broadcom firmware blobs are included for board bring-up convenience; verify
+  that your redistribution model is acceptable for your target audience.
 - No default IPs, passwords, UUIDs, or serial port names are embedded in the
   tracked files.
