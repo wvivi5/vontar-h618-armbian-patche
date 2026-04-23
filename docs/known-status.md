@@ -15,7 +15,8 @@ Vontar H618 unit and close H616-class variants.
 
 - This repository is for reproducible local builds and diagnostics.
 - It is not a claim of upstream readiness for Linux, U-Boot, or Armbian.
-- Firmware binaries are not distributed here.
+- Board-specific firmware payloads are currently included in this repository for
+  bring-up convenience.
 - Other RAM sizes and board revisions are not yet fully validated.
 
 ## Before Upstreaming
