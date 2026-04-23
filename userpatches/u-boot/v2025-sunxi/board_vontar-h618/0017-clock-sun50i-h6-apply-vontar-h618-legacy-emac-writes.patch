@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+Date: Thu, 2 Apr 2026 12:08:00 +0200
+Subject: [PATCH] u-boot: sunxi: restore vontar-h618 legacy EMAC clock writes
+
+Carry over the historical raw clock/register writes used by the older
+H616 Vontar U-Boot LAN bring-up path.
+
+Assisted-by: Artjom W. <aco.art@gmail.com>
+---
+ arch/arm/mach-sunxi/clock_sun50i_h6.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm/mach-sunxi/clock_sun50i_h6.c b/arch/arm/mach-sunxi/clock_sun50i_h6.c
+index 7926394cf76..7c84d731f84 100644
+--- a/arch/arm/mach-sunxi/clock_sun50i_h6.c
++++ b/arch/arm/mach-sunxi/clock_sun50i_h6.c
+@@ -46,6 +46,10 @@ void clock_init_safe(void)
+ 	 * DRAM initialization code.
+ 	 */
+ 	writel(MBUS_CLK_SRC_PLL6X2 | MBUS_CLK_M(3), &ccm->mbus_cfg);
++
++	writel(0x10001, 0x030017ac);
++	writel(0x50, 0x0300a028);
++	writel(0x20, 0x0300a040);
+ }
+ 
+ void clock_init_uart(void)
+-- 
+2.43.0

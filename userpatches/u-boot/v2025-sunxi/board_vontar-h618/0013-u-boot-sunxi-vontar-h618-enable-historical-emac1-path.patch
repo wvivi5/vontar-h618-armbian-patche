@@ -1,0 +1,54 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artjom W. <aco.art@gmail.com>
+Date: Thu, 2 Apr 2026 12:05:00 +0200
+Subject: [PATCH] u-boot: sunxi: vontar-h618: enable historical EMAC1 path
+
+Keep the historical H616 EMAC1 support bits needed by the old Vontar
+bring-up path. The board DTS already provides the EMAC1 node, so this
+patch only restores the generic driver and pinctrl pieces.
+
+Assisted-by: Artjom W. <aco.art@gmail.com>
+---
+ drivers/net/sun8i_emac.c              | 6 ++++++
+ drivers/pinctrl/sunxi/pinctrl-sunxi.c | 1 +
+ 2 files changed, 7 insertions(+)
+
+diff --git a/drivers/net/sun8i_emac.c b/drivers/net/sun8i_emac.c
+index a1af64af4..257674df0 100644
+--- a/drivers/net/sun8i_emac.c
++++ b/drivers/net/sun8i_emac.c
+@@ -905,6 +905,11 @@ static const struct emac_variant emac_variant_h6 = {
+ 	.support_rmii		= true,
+ };
+ 
++static const struct emac_variant emac_variant_h616_1 = {
++	.syscon_offset		= 0x34,
++	.support_rmii		= true,
++};
++
+ static const struct udevice_id sun8i_emac_eth_ids[] = {
+ 	{ .compatible = "allwinner,sun8i-a83t-emac",
+ 	  .data = (ulong)&emac_variant_a83t },
+@@ -918,6 +923,8 @@ static const struct udevice_id sun8i_emac_eth_ids[] = {
+ 	  .data = (ulong)&emac_variant_a64 },
+ 	{ .compatible = "allwinner,sun50i-h6-emac",
+ 	  .data = (ulong)&emac_variant_h6 },
++	{ .compatible = "allwinner,sun50i-h616-emac1",
++	  .data = (ulong)&emac_variant_h616_1 },
+ 	{ }
+ };
+ 
+diff --git a/drivers/pinctrl/sunxi/pinctrl-sunxi.c b/drivers/pinctrl/sunxi/pinctrl-sunxi.c
+index 37ea93715..956f1cdd3 100644
+--- a/drivers/pinctrl/sunxi/pinctrl-sunxi.c
++++ b/drivers/pinctrl/sunxi/pinctrl-sunxi.c
+@@ -736,6 +736,7 @@ static const struct sunxi_pinctrl_desc __maybe_unused sun50i_h6_r_pinctrl_desc =
+ };
+ 
+ static const struct sunxi_pinctrl_function sun50i_h616_pinctrl_functions[] = {
++	{ "emac1",	2 },	/* PA0-PA9 */
+ 	{ "emac0",	2 },	/* PI0-PI16 */
+ 	{ "gpio_in",	0 },
+ 	{ "gpio_out",	1 },
+-- 
+2.43.0

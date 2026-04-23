@@ -1,0 +1,216 @@
+# Vontar H618 TV box RAM 4Gb on Allwinner H616/H618-class SoC
+BOARD_NAME="Vontar H618"
+BOARD_VENDOR="vontar"
+BOARDFAMILY="sun50iw9"
+BOOTCONFIG="vontar_h618_zero2w_defconfig"
+BOOTBRANCH="tag:v2025.04"
+BOOTPATCHDIR="v2025-sunxi"
+BOOT_FDT_FILE="allwinner/sun50i-h618-vontar-h618.dtb"
+BOOT_LOGO="desktop"
+OVERLAY_PREFIX="sun50i-h616"
+KERNEL_TARGET="current,edge"
+KERNEL_TEST_TARGET="current,edge"
+FORCE_BOOTSCRIPT_UPDATE="yes"
+
+# This board keeps a dedicated zero2w-based U-Boot and now uses
+# its own Linux DTB filename.
+
+function vontar_h618__series_remove_patch_line() {
+	local series_path="$1"
+	local patch_name="$2"
+	local line_numbers=()
+	local line_number
+
+	[[ -f "${series_path}" ]] || return 0
+
+	mapfile -t line_numbers < <(grep -nF "patches.armbian/${patch_name}" "${series_path}" | cut -d: -f1 | sort -rn)
+	[[ ${#line_numbers[@]} -gt 0 ]] || return 0
+
+	for line_number in "${line_numbers[@]}"; do
+		sed -i "${line_number}d" "${series_path}"
+	done
+
+	display_alert "${BOARD}" "Removed ${patch_name} from $(basename "${series_path}")" "info"
+	return 0
+}
+
+function vontar_h618__series_insert_patch_before() {
+	local series_path="$1"
+	local patch_name="$2"
+	local anchor_name="$3"
+	local patch_line anchor_line anchor_number
+
+	[[ -f "${series_path}" ]] || return 0
+
+	patch_line=$'\t'"patches.armbian/${patch_name}"
+	anchor_line=$'\t'"patches.armbian/${anchor_name}"
+
+	if grep -Fqx "${patch_line}" "${series_path}"; then
+		return 0
+	fi
+
+	anchor_number="$(grep -nF "${anchor_line}" "${series_path}" | head -n1 | cut -d: -f1)"
+
+	if [[ -n "${anchor_number}" ]]; then
+		sed -i "${anchor_number}i\\${patch_line}" "${series_path}"
+	else
+		printf '%s\n' "${patch_line}" >> "${series_path}"
+	fi
+
+	display_alert "${BOARD}" "Ensured ${patch_name} in $(basename "${series_path}")" "info"
+	return 0
+}
+
+function vontar_h618__series_ensure_patch() {
+	local series_path="$1"
+	local patches_dir="$2"
+	local patch_name="$3"
+	local anchor_name="$4"
+	local obsolete_patch_name
+	shift 4
+
+	[[ -f "${patches_dir}/${patch_name}" ]] || return 0
+
+	for obsolete_patch_name in "$@"; do
+		vontar_h618__series_remove_patch_line "${series_path}" "${obsolete_patch_name}"
+	done
+
+	vontar_h618__series_insert_patch_before "${series_path}" "${patch_name}" "${anchor_name}"
+	return 0
+}
+
+function custom_kernel_config__vontar_h618_enable_net_modules() {
+	opts_y+=(
+		STMMAC_ETH
+	)
+
+	opts_m+=(
+		STMMAC_PCI
+		SUNXI_GMAC
+		AC200_PHY
+		AC200_PHY_SUNXI
+		AC200_PHY_CTL
+		MFD_AC200
+		MFD_AC200_SUNXI
+	)
+
+	return 0
+}
+
+function post_family_config__vontar_h618_kernel_patches() {
+	local archive_dir="${SRC}/patch/kernel/archive/sunxi-${KERNEL_MAJOR_MINOR}"
+	local patches_dir="${archive_dir}/patches.armbian"
+	local series_path="${archive_dir}/series.conf"
+
+	KERNELPATCHDIR="${KERNELPATCHDIR} vontar-h618"
+
+	if [[ -f "${series_path}" && -d "${patches_dir}" ]]; then
+		vontar_h618__series_ensure_patch \
+			"${series_path}" "${patches_dir}" \
+			"drv-mfd-ac200-add-support.patch" \
+			"0301-arm64-dts-sun50i-h616-add-emac1-rmii-pins.patch" \
+			"0201-drv-mfd-ac200-add-support.patch" \
+			"0202-drv-net-phy-ac200-ephy-add.patch"
+
+		vontar_h618__series_ensure_patch \
+			"${series_path}" "${patches_dir}" \
+			"drv-net-stmmac-sun8i-add-h618-emac.patch" \
+			"0301-arm64-dts-sun50i-h616-add-emac1-rmii-pins.patch" \
+			"0203-drv-net-stmmac-sun8i-add-h618-emac.patch"
+
+		vontar_h618__series_ensure_patch \
+			"${series_path}" "${patches_dir}" \
+			"drv-mfd-ac200-add-ephy-syscon.patch" \
+			"drv-mfd-axp20x-add-sysfs.patch"
+	fi
+
+	return 0
+}
+
+function post_family_tweaks__vontar_h618_brcm4334_firmware() {
+	local fw_src="${USERPATCHES_PATH}/overlay/lib/firmware/brcm"
+	local fw_dst="${SDCARD}/lib/firmware/brcm"
+
+	[[ -d "${fw_src}" ]] || {
+		display_alert "${BOARD}" "Skipping BCM4334 firmware; place payloads in userpatches/overlay/lib/firmware/brcm if licensed" "info"
+		return 0
+	}
+
+	display_alert "${BOARD}" "Installing BCM4334 firmware for vontar,h618" "info"
+
+	run_host_command_logged install -d -m 0755 "${fw_dst}"
+
+	# Exact board-specific payloads
+	local required=(
+		"BCM4334B0.vontar,h618.hcd"
+		"brcmfmac4334-sdio.vontar,h618.bin"
+		"brcmfmac4334-sdio.vontar,h618.txt"
+	)
+
+	local f
+	for f in "${required[@]}"; do
+		if [[ -f "${fw_src}/${f}" ]]; then
+			run_host_command_logged install -m 0644 \
+				"${fw_src}/${f}" \
+				"${fw_dst}/${f}"
+		else
+			display_alert "${BOARD}" "Missing firmware payload: ${f}" "wrn"
+		fi
+	done
+
+	# Sanity checks
+	[[ -s "${fw_dst}/BCM4334B0.vontar,h618.hcd" ]] || \
+		display_alert "${BOARD}" "Missing BCM4334B0.vontar,h618.hcd" "wrn"
+
+	[[ -s "${fw_dst}/brcmfmac4334-sdio.vontar,h618.bin" ]] || \
+		display_alert "${BOARD}" "Missing brcmfmac4334-sdio.vontar,h618.bin" "wrn"
+
+	[[ -s "${fw_dst}/brcmfmac4334-sdio.vontar,h618.txt" ]] || \
+		display_alert "${BOARD}" "Missing brcmfmac4334-sdio.vontar,h618.txt" "wrn"
+
+	# Generic fallback aliases for drivers that request non-board-specific names
+	run_host_command_logged rm -f \
+		"${fw_dst}/BCM4334B0.hcd" \
+		"${fw_dst}/brcmfmac4334-sdio.bin" \
+		"${fw_dst}/brcmfmac4334-sdio.txt"
+
+	run_host_command_logged ln -srf \
+		"${fw_dst}/BCM4334B0.vontar,h618.hcd" \
+		"${fw_dst}/BCM4334B0.hcd"
+
+	run_host_command_logged ln -srf \
+		"${fw_dst}/brcmfmac4334-sdio.vontar,h618.bin" \
+		"${fw_dst}/brcmfmac4334-sdio.bin"
+
+	run_host_command_logged ln -srf \
+		"${fw_dst}/brcmfmac4334-sdio.vontar,h618.txt" \
+		"${fw_dst}/brcmfmac4334-sdio.txt"
+
+	return 0
+}
+
+function post_family_tweaks__vontar_h618_sunxi_gmac_mac() {
+	local mac="${VONTAR_H618_MAC:-}"
+
+	[[ -n "${mac}" ]] || {
+		display_alert "${BOARD}" "Skipping sunxi_gmac MAC override; set VONTAR_H618_MAC to force one" "info"
+		return 0
+	}
+
+	run_host_command_logged install -d -m 0755 "${SDCARD}/etc/modprobe.d"
+	run_host_command_logged bash -c "cat > '${SDCARD}/etc/modprobe.d/sunxi_gmac.conf' <<'EOF'
+options sunxi_gmac mac_str=${mac}
+EOF"
+	run_host_command_logged chroot "${SDCARD}" /usr/sbin/update-initramfs -u
+
+	return 0
+}
+
+function post_family_config__vontar_h618_desktop_validation_packages() {
+	if [[ "${BUILD_DESKTOP}" == "yes" ]]; then
+		display_alert "$BOARD" "Installing desktop validation packages" "info"
+		add_packages_to_image chromium mpv ffmpeg
+	fi
+
+	return 0
+}

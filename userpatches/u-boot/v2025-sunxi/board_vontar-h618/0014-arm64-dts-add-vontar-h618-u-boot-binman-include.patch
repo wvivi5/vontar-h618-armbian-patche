@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artjom W. <aco.art@gmail.com>
+Date: Thu, 2 Apr 2026 13:42:00 +0200
+Subject: [PATCH] arm64: dts: add Vontar H618 U-Boot binman include
+
+Provide a board-specific U-Boot DTSI for the upstream-style
+sun50i-h618-vontar-h618.dts board file. This avoids relying on the
+generic sunxi-u-boot.dtsi include path, which is injected after the
+upstream DT preprocessing stage and currently trips DTC for this custom
+board in the Armbian build flow.
+
+The content is the resolved variant of the standard sunxi U-Boot binman
+layout for this board configuration:
+- ARM64
+- mmc slot extra = 2
+- SPL FIT enabled
+- BL31 loaded at 0x40000000
+- no SCP firmware
+
+Assisted-by: Artjom W. <aco.art@gmail.com>
+---
+ arch/arm/dts/sun50i-h618-vontar-h618-u-boot.dtsi | 78 +++++++++++++++++++++++
+ 1 file changed, 78 insertions(+)
+ create mode 100644 arch/arm/dts/sun50i-h618-vontar-h618-u-boot.dtsi
+
+diff --git a/arch/arm/dts/sun50i-h618-vontar-h618-u-boot.dtsi b/arch/arm/dts/sun50i-h618-vontar-h618-u-boot.dtsi
+new file mode 100644
+--- /dev/null
++++ b/arch/arm/dts/sun50i-h618-vontar-h618-u-boot.dtsi
+@@ -0,0 +1,78 @@
++/ {
++	aliases {
++		mmc0 = &mmc0;
++		mmc1 = &mmc2;
++	};
++
++	binman: binman {
++		multiple-images;
++	};
++};
++
++&binman {
++	u-boot-sunxi-with-spl {
++		filename = "u-boot-sunxi-with-spl.bin";
++		pad-byte = <0xff>;
++
++		blob {
++			/*
++			 * This value matches SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR
++			 * and SYS_SPI_U_BOOT_OFFS if those are defined.
++			 */
++			min-size = <0x8000>;
++			filename = "spl/sunxi-spl.bin";
++		};
++
++		fit {
++			description = "Configuration to load U-Boot and firmware";
++			#address-cells = <1>;
++			fit,fdt-list = "of-list";
++
++			images {
++				uboot {
++					description = "U-Boot";
++					type = "standalone";
++					os = "u-boot";
++					arch = "arm64";
++					compression = "none";
++					load = <0x4a000000>;
++
++					u-boot-nodtb {
++					};
++				};
++
++				atf {
++					description = "ARM Trusted Firmware";
++					type = "firmware";
++					os = "arm-trusted-firmware";
++					arch = "arm64";
++					compression = "none";
++					load = <0x40000000>;
++					entry = <0x40000000>;
++
++					atf-bl31 {
++						filename = "bl31.bin";
++						missing-msg = "atf-bl31-sunxi";
++					};
++				};
++
++				@fdt-SEQ {
++					description = "NAME";
++					type = "flat_dt";
++					compression = "none";
++				};
++			};
++
++			configurations {
++				default = "@config-DEFAULT-SEQ";
++
++				@config-SEQ {
++					description = "NAME";
++					firmware = "atf";
++					loadables = "uboot";
++					fdt = "fdt-SEQ";
++				};
++			};
++		};
++	};
++};
+-- 
+2.43.0

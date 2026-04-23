@@ -1,0 +1,33 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Artjom W. <aco.art@gmail.com>
+Date: Wed, 1 Apr 2026 14:47:00 +0200
+Subject: [PATCH] sunxi: mmc: keep probing mmc0 with broken card detect
+
+On affected Vontar H618 TV boxes the mmc0 card-detect GPIO is unreliable
+in U-Boot proper. When CONFIG_MMC_BROKEN_CD is enabled, keep probing
+slot 0 instead of failing early with "no card present".
+
+Assisted-by: Artjom W. <aco.art@gmail.com>
+---
+ drivers/mmc/sunxi_mmc.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/mmc/sunxi_mmc.c b/drivers/mmc/sunxi_mmc.c
+--- a/drivers/mmc/sunxi_mmc.c
++++ b/drivers/mmc/sunxi_mmc.c
+@@ -597,6 +597,13 @@ static int sunxi_mmc_getcd(struct udevice *dev)
+ 	if ((mmc->cfg->host_caps & MMC_CAP_NONREMOVABLE) ||
+ 	    (mmc->cfg->host_caps & MMC_CAP_NEEDS_POLL))
+ 		return 1;
++
++	/*
++	 * On affected Vontar H618 TV boxes CD GPIO can be unreliable in U-Boot
++	 * proper. Keep probing mmc0 instead of failing with "no card present".
++	 */
++	if (IS_ENABLED(CONFIG_MMC_BROKEN_CD) && priv->mmc_no == 0)
++		return 1;
+ 
+ 	if (dm_gpio_is_valid(&priv->cd_gpio)) {
+ 		int cd_state = dm_gpio_get_value(&priv->cd_gpio);
+-- 
+2.43.0
