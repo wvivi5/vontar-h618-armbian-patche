@@ -6,6 +6,26 @@ H618 and similar H616-class Allwinner TV boxes.
 The project goal is to boot Armbian from microSD with a dedicated project
 U-Boot/SPL path instead of relying on the stock Android or eMMC boot chain.
 
+## Board Photos
+
+These photos document the tested board variant targeted by this payload.
+See [VONTAR_H618_HARDWARE.md](userpatches/VONTAR_H618_HARDWARE.md) for full hardware details.
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="userpatches/vontar-h618-frontside.jpg" alt="Vontar H618 board front side" width="420">
+      <br>
+      <sub>Front side</sub>
+    </td>
+    <td align="center">
+      <img src="userpatches/vontar-h618-backside.jpg" alt="Vontar H618 board back side" width="420">
+      <br>
+      <sub>Back side</sub>
+    </td>
+  </tr>
+</table>
+
 ## Validated Setup
 
 - Validated target: one 4 GiB DDR3 Vontar H618 unit
