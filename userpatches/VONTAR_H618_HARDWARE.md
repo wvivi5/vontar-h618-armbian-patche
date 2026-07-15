@@ -180,6 +180,10 @@ types `poweroff` without Enter. On a graphical VT it emits virtual
 poweroff still requires physical power to start the box again; no IR wakeup is
 claimed, and the kernel/DTB remain unchanged.
 
+The final physical test with the stock remote confirmed that Power fills the
+command line without executing it and leaves Linux running. OK/Enter remains
+the separate, explicit confirmation step.
+
 ## Wi-Fi/BT Power Sequence
 
 Wi-Fi and Bluetooth initialization depends on the DTS power bundle, not only on

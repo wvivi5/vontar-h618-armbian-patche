@@ -39,6 +39,9 @@ Vontar H618 unit and close H616-class variants.
   types `poweroff` without Enter; on a graphical VT it forwards virtual
   `KEY_POWER`. Console and graphical branches passed runtime checks without
   executing poweroff or restarting the console.
+- A physical stock-remote test on the text console confirmed the final safety
+  behavior: pressing Power only fills `poweroff`; the box remains running
+  until the user explicitly confirms it with OK/Enter.
 
 ## Active U-Boot Boot Policy
 
