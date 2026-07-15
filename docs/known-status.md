@@ -30,6 +30,11 @@ Vontar H618 unit and close H616-class variants.
 - Two additional 7.0.14 boots on 2026-07-14 kept the same SID-derived MAC,
   carrier, 100Mbps/full link, and native-LAN traffic. A clean 6.18.38/Trixie
   run on 2026-07-15 independently confirmed the same native `end0` path.
+- Stock remote IR is validated on 2026-07-15. Raw capture identified all 12
+  physical NEC address-`0x01` buttons. The dedicated keymap was loaded and
+  left/right/OK were confirmed as post-map evdev events from `sunxi-ir`.
+- New images install `ir-keytable` and enable `vontar-h618-ir.service`
+  automatically. The earlier `rc-beelink-gs1` assumption is rejected.
 
 ## Active U-Boot Boot Policy
 
@@ -61,6 +66,8 @@ Vontar H618 unit and close H616-class variants.
 - Board-specific firmware payloads are currently included in this repository for
   bring-up convenience.
 - Other RAM sizes and board revisions are not yet fully validated.
+- The IR table targets the photographed/tested 12-button remote. A different
+  bundled handset may use another NEC address or command set.
 
 ## Before Upstreaming
 

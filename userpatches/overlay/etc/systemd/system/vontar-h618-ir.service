@@ -1,0 +1,11 @@
+[Unit]
+Description=Vontar H618 infrared remote keymap
+After=systemd-udev-trigger.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vontar-h618-ir-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

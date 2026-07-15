@@ -149,6 +149,29 @@ the board being prepared by the project U-Boot first.
 | BT host wake | `PG16`, active-high |
 | BT reset | `PG19`, active-low reset GPIO |
 
+## Infrared Remote
+
+| Field | Value |
+| --- | --- |
+| Receiver | `sunxi-ir` / `ir@7040000` |
+| Receiver pin | `PH10` / `ir_rx` |
+| Protocol | NEC |
+| Captured address | `0x01` |
+| Persistent table | `/etc/rc_keymaps/vontar-h618.toml` |
+| Loader | `vontar-h618-ir.service` |
+
+The stock 12-button handset is not compatible with `rc-beelink-gs1`. Physical
+capture produced the following commands: right `0x50`, left `0x51`, up `0x16`,
+down `0x1a`, OK `0x13`, back `0x19`, home `0x11`, menu `0x4c`, mouse/context
+`0x00`, volume up `0x18`, volume down `0x10`, and power `0x40`. Linux
+`ir-keytable` represents these with the NEC address prefix as `0x150`,
+`0x151`, and so on.
+
+The kernel DTS already enables `&ir`; no DTB change is needed. Image
+customization installs `ir-keytable`, the table, the wait-for-`rc0` loader, and
+the enabled systemd unit. After loading, physical left/right/OK presses were
+verified as `KEY_LEFT`, `KEY_RIGHT`, and `KEY_OK` evdev events.
+
 ## Wi-Fi/BT Power Sequence
 
 Wi-Fi and Bluetooth initialization depends on the DTS power bundle, not only on

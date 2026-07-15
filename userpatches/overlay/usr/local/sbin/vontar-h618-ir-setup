@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+attempt=0
+while [ ! -e /sys/class/rc/rc0 ]; do
+	attempt=$((attempt + 1))
+	[ "$attempt" -lt 51 ] || exit 1
+	sleep 0.2
+done
+
+exec /usr/bin/ir-keytable \
+	-s rc0 \
+	-c \
+	-w /etc/rc_keymaps/vontar-h618.toml

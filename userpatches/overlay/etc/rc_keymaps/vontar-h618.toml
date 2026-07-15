@@ -1,0 +1,18 @@
+[[protocols]]
+name = "vontar_h618"
+protocol = "nec"
+variant = "nec"
+
+[protocols.scancodes]
+0x150 = "KEY_RIGHT"
+0x151 = "KEY_LEFT"
+0x116 = "KEY_UP"
+0x11a = "KEY_DOWN"
+0x113 = "KEY_OK"
+0x119 = "KEY_BACK"
+0x111 = "KEY_HOME"
+0x14c = "KEY_MENU"
+0x100 = "KEY_CONTEXT_MENU"
+0x118 = "KEY_VOLUMEUP"
+0x110 = "KEY_VOLUMEDOWN"
+0x140 = "KEY_POWER"

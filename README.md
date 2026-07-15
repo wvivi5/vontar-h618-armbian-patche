@@ -36,6 +36,8 @@ See [VONTAR_H618_HARDWARE.md](userpatches/VONTAR_H618_HARDWARE.md) for full hard
   `uboot.env` dependency, no UART abort window, and a minimal microSD command.
 - The board explicitly selects Armbian's ARM64 `boot-sun50i-next.cmd`. It loads
   `Image` and the board DTB and maps `console=display` to `console=tty1`.
+- The stock NEC infrared remote is installed automatically with a validated
+  12-button Vontar keymap; no Android or Beelink keymap is required.
 
 ## Quick Start
 
@@ -72,6 +74,40 @@ Board-specific Broadcom firmware payloads are included under
 `userpatches/overlay/lib/firmware/brcm/`. If you redistribute this repository
 or derived images, verify that the firmware licensing terms are acceptable for
 your use.
+
+## Infrared Remote
+
+The tested stock remote uses the NEC protocol with address `0x01`. Its codes
+do not match `rc-beelink-gs1`. The image customization hook installs
+`ir-keytable`, copies the dedicated `vontar-h618.toml` table, and enables
+`vontar-h618-ir.service`. The service waits for `rc0`, so minimal and desktop
+images get the same mapping even when the input device appears late.
+
+All 12 physical buttons were observed in the runtime NEC capture. The
+navigation path was then verified after loading the table as real Linux input
+events: `KEY_LEFT`, `KEY_RIGHT`, and `KEY_OK` from `sunxi-ir`.
+
+To inspect the active mapping and service after boot:
+
+```bash
+systemctl status vontar-h618-ir.service
+ir-keytable -s rc0 -r
+```
+
+| Remote button | NEC scancode | Linux key |
+| --- | --- | --- |
+| Right | `0x150` | `KEY_RIGHT` |
+| Left | `0x151` | `KEY_LEFT` |
+| Up | `0x116` | `KEY_UP` |
+| Down | `0x11a` | `KEY_DOWN` |
+| OK | `0x113` | `KEY_OK` |
+| Back | `0x119` | `KEY_BACK` |
+| Home | `0x111` | `KEY_HOME` |
+| Menu | `0x14c` | `KEY_MENU` |
+| Mouse/context | `0x100` | `KEY_CONTEXT_MENU` |
+| Volume up | `0x118` | `KEY_VOLUMEUP` |
+| Volume down | `0x110` | `KEY_VOLUMEDOWN` |
+| Power | `0x140` | `KEY_POWER` |
 
 ## Current Boot Notes
 
@@ -124,6 +160,8 @@ The remote workflow expects `sshpass` or `expect` on the host. The Windows
 - Optional manual MAC override: `userpatches/overlay/etc/modprobe.d/sunxi_gmac.conf`
   (normally unnecessary because `sunxi-gmac` derives a stable address from SID)
 - Board-specific Broadcom firmware payloads: `userpatches/overlay/lib/firmware/brcm/`
+- Stock remote keymap and boot service: `userpatches/overlay/etc/rc_keymaps/`
+  and `userpatches/overlay/etc/systemd/system/vontar-h618-ir.service`
 - Hardware profile: `userpatches/VONTAR_H618_HARDWARE.md`
 
 ## Status
