@@ -51,11 +51,24 @@ This payload is validated on the 4 GiB DDR3 Vontar H618 box.
 | --- | --- |
 | Boot console | UART0 / `serial@5000000` / 115200 8N1 |
 | Boot console pins | `PH0/PH1` |
+| Linux default console | display/HDMI only; UART0 is not a default Linux system console |
 | Bluetooth host UART | UART1 / `serial@5000400` / `ttyS1` |
 | UART1 pins | `PG6..PG9` |
 | microSD | `mmc0` / `mmc@4020000`, probed even with unreliable U-Boot card-detect |
 | SDIO Wi-Fi | `mmc1` / `mmc@4021000` |
 | eMMC | `mmc2` / `mmc@4022000` |
+
+## U-Boot Boot Policy
+
+- The project U-Boot uses a compiled default environment; FAT `uboot.env` is
+  disabled on purpose.
+- `BOOTDELAY=-2` is required on the tested board so UART noise cannot abort
+  autoboot before `bootcmd` runs.
+- Boot explicitly loads `/boot/boot.scr` from microSD and supplies the
+  `devtype`, `devnum`, and `prefix` variables required by Armbian.
+- Linux images use the ARM64 `boot-sun50i-next.cmd` flow with `console=display`
+  mapped to HDMI/display only. Use `console=both` for UART0 debug.
+- Full install-to-eMMC still needs runtime Linux validation after normal boot.
 
 ## Built-In Ethernet
 
@@ -67,7 +80,8 @@ This payload is validated on the 4 GiB DDR3 Vontar H618 box.
 | PHY mode | RMII |
 | RMII pins | `PA0..PA9` |
 | Linux DTS PHY node | `mdio1/ethernet-phy@0`, `reg = <0>` |
-| Working Linux attach path | `stmmac-0:00`, `PHYAD 0`, Generic PHY |
+| Working Linux attach path | `5030000.ethernet-0:00`, `PHYAD 0`, Generic PHY |
+| Linux network driver | `sunxi_geth` (`sunxi-gmac`) |
 | Additional MDIO responder | address `0x10` / decimal `16` responds on the bus |
 | Empty MDIO address | decimal `10` |
 | IRQ | `GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH`; Linux IRQ observed as `47` |
@@ -114,11 +128,12 @@ the board being prepared by the project U-Boot first.
 - Linux receives a board state already prepared by U-Boot preinit.
 - Kernel DTS exposes EMAC1 as `ethernet@5030000` in RMII mode.
 - Kernel DTS exposes the Linux attach PHY as `mdio1/ethernet-phy@0`.
-- Kernel config keeps `STMMAC_ETH` and the AC200/MFD support modules used by
-  this Vontar LAN line.
+- Kernel config restores `SUNXI_GMAC` with the AC200/MFD/EPHY support modules;
+  the board `.tvb` disables the conflicting AC300/DWMAC replacement patches.
 - Expected runtime result is `end0` with `Link is Up - 100Mbps/Full`.
-- `sunxi_gmac.conf` is only an optional MAC override example. No personal MAC
-  address is included in this payload.
+- The driver derives a stable locally administered MAC from the SoC SID without
+  waiting for a crypto provider. `sunxi_gmac.conf` remains an optional override;
+  no personal MAC address is included in this payload.
 
 ## Wi-Fi And Bluetooth
 

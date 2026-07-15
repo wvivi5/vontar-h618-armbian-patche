@@ -32,6 +32,10 @@ See [VONTAR_H618_HARDWARE.md](userpatches/VONTAR_H618_HARDWARE.md) for full hard
 - Boot path: microSD with project U-Boot/SPL
 - Kernel line: Armbian `current` and `edge`
 - LAN bring-up: depends on the matching U-Boot preinit sequence in this repo
+- Current U-Boot boot policy: deterministic default environment, no FAT
+  `uboot.env` dependency, no UART abort window, and a minimal microSD command.
+- The board explicitly selects Armbian's ARM64 `boot-sun50i-next.cmd`. It loads
+  `Image` and the board DTB and maps `console=display` to `console=tty1`.
 
 ## Quick Start
 
@@ -46,8 +50,8 @@ cd armbian-build
 rm -rf userpatches
 ln -s ../vontar-h618-armbian-patche/userpatches userpatches
 
-./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=bookworm \
-  BUILD_DESKTOP=no BUILD_MINIMAL=no KERNEL_CONFIGURE=no
+./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
+  BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
 ```
 
 `rm -rf userpatches` removes the existing `userpatches/` directory inside the
@@ -58,11 +62,31 @@ The board configuration currently expects:
 - U-Boot defconfig: `vontar_h618_zero2w_defconfig`
 - Linux DTB: `allwinner/sun50i-h618-vontar-h618.dtb`
 - U-Boot branch: `tag:v2025.04`
+- U-Boot boot command: load `/boot/boot.scr` from microSD `mmc 0:1`
+
+The same payload was also build-tested with `current/bookworm`, `edge/noble`,
+and `edge/resolute`; see [known-status.md](docs/known-status.md) for the exact
+kernel versions and hardware-validation boundary.
 
 Board-specific Broadcom firmware payloads are included under
 `userpatches/overlay/lib/firmware/brcm/`. If you redistribute this repository
 or derived images, verify that the firmware licensing terms are acceptable for
 your use.
+
+## Current Boot Notes
+
+- Armbian sunxi sets `BOOTDELAY=1` by default, which allows UART noise to abort
+  autoboot and drop to the U-Boot prompt before `bootcmd` runs.
+- The Vontar board hook overrides that to `BOOTDELAY=-2`; U-Boot then runs
+  `bootcmd` without checking for abort input.
+- The board defconfig uses `CONFIG_ENV_IS_NOWHERE=y` and disables FAT env, so
+  the build uses the compiled default environment and lets Armbian's
+  `/boot/boot.scr` read `/boot/armbianEnv.txt`.
+- The minimal boot command sets `devtype`, `devnum`, and `prefix`, then sources
+  Armbian's generated `/boot/boot.scr` from `mmc 0:1`.
+- The board override is copied from maintained `boot-sun50i-next.cmd` and only
+  separates its console mapping. Production `display` excludes `ttyS0`; debug
+  `both` still enables it.
 
 ## Repository Layout
 
@@ -96,7 +120,9 @@ The remote workflow expects `sshpass` or `expect` on the host. The Windows
 - Armbian board file: `userpatches/config/boards/vontar-h618.tvb`
 - Kernel DTS patches: `userpatches/kernel/vontar-h618/`
 - U-Boot bring-up patches: `userpatches/u-boot/v2025-sunxi/board_vontar-h618/`
-- Optional MAC override example: `userpatches/overlay/etc/modprobe.d/sunxi_gmac.conf`
+- Restored H618 LAN driver: `userpatches/kernel/vontar-h618/0004-driver-allwinner-h618-emac-restore-sunxi-gmac.patch`
+- Optional manual MAC override: `userpatches/overlay/etc/modprobe.d/sunxi_gmac.conf`
+  (normally unnecessary because `sunxi-gmac` derives a stable address from SID)
 - Board-specific Broadcom firmware payloads: `userpatches/overlay/lib/firmware/brcm/`
 - Hardware profile: `userpatches/VONTAR_H618_HARDWARE.md`
 

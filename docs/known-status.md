@@ -10,6 +10,49 @@ Vontar H618 unit and close H616-class variants.
 - Boot path target: microSD with project U-Boot/SPL
 - Kernel line target: Armbian `current` and `edge` for the Vontar board file
 - LAN bring-up depends on the matching U-Boot preinit sequence in this payload
+- Linux 7.0.14/Noble runtime is validated with restored `sunxi-gmac`: PHY
+  `0x00441400`, carrier `1`, `100Mbps/Full`, and working network traffic.
+- The published Linux DTS/DTB remains unchanged. The board `.tvb` selects the
+  legacy sunxi-gmac/EPHY path and disables the conflicting AC300/DWMAC patches.
+- MAC is deterministically derived from the SoC SID and remains stable across
+  reboots. No crypto-provider ordering is required.
+- Kernel packages and minimal images are built with one patch payload for the
+  following combinations. All contain the GMAC/EPHY/AC200 modules and board
+  DTB.
+
+| Branch | Release | Built kernel | Build | Hardware runtime |
+| --- | --- | --- | --- | --- |
+| `current` | Bookworm | 6.18.38 | pass | not repeated |
+| `current` | Trixie | 6.18.38 | pass | pass, clean image |
+| `edge` | Noble | 7.0.14 | pass | pass |
+| `edge` | Resolute | 7.0.14 | pass | not repeated |
+
+- Two additional 7.0.14 boots on 2026-07-14 kept the same SID-derived MAC,
+  carrier, 100Mbps/full link, and native-LAN traffic. A clean 6.18.38/Trixie
+  run on 2026-07-15 independently confirmed the same native `end0` path.
+
+## Active U-Boot Boot Policy
+
+- U-Boot v2025.04 is built from `vontar_h618_zero2w_defconfig`.
+- The default environment is compiled in; FAT `uboot.env` is intentionally not
+  used.
+- `BOOTDELAY=-2` is required for this board because UART noise can otherwise
+  abort autoboot during the countdown before `bootcmd` runs.
+- Boot explicitly loads `/boot/boot.scr` from microSD `mmc 0:1` and supplies
+  the `devtype`, `devnum`, and `prefix` variables expected by that script.
+- Built images force `console=display` through `DEFAULT_CONSOLE`.
+- The board uses an ARM64 `boot-sun50i-next.cmd` override, which loads `Image`
+  and DTB; its only functional difference is `display` mapping to `tty1`.
+- Linux DTS/DTB is not changed by this boot-policy fix.
+
+## Recent Debug Markers
+
+- `P6134`: proved that default env and explicit bootcmd were present, but
+  `BOOTDELAY=1` still allowed UART input/noise to abort autoboot.
+- `Pa852`: proved `BOOTDELAY=-2` gets past UART abort and that manually sourcing
+  Armbian `boot.scr` is fragile without the distro-boot environment.
+- `P8b1e`: rejected; a copied legacy script skipped DTB loading and requested
+  `/boot/uImage`. This was a boot-script regression, not a kernel/DTB failure.
 
 ## Boundaries
 

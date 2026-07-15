@@ -7,6 +7,8 @@ BOOTBRANCH="tag:v2025.04"
 BOOTPATCHDIR="v2025-sunxi"
 BOOT_FDT_FILE="allwinner/sun50i-h618-vontar-h618.dtb"
 BOOT_LOGO="desktop"
+BOOTSCRIPT="boot-sun50i-next.cmd:boot.cmd"
+DEFAULT_CONSOLE="display"
 OVERLAY_PREFIX="sun50i-h616"
 KERNEL_TARGET="current,edge"
 KERNEL_TEST_TARGET="current,edge"
@@ -14,6 +16,11 @@ FORCE_BOOTSCRIPT_UPDATE="yes"
 
 # This board keeps a dedicated zero2w-based U-Boot and now uses
 # its own Linux DTB filename.
+#
+# Armbian sunxi defaults BOOTDELAY to 1 late in the configuration flow. On the
+# tested Vontar box UART noise can then abort autoboot before bootcmd runs.
+# Keep BOOTDELAY=-2 in the post-family hook below so U-Boot always executes the
+# compiled bootcmd and does not stop on stray input during countdown.
 
 function vontar_h618__series_remove_patch_line() {
 	local series_path="$1"
@@ -94,6 +101,11 @@ function custom_kernel_config__vontar_h618_enable_net_modules() {
 		MFD_AC200_SUNXI
 	)
 
+	opts_n+=(
+		DWMAC_SUN8I
+		AC300_PHY
+	)
+
 	return 0
 }
 
@@ -102,15 +114,36 @@ function post_family_config__vontar_h618_kernel_patches() {
 	local patches_dir="${archive_dir}/patches.armbian"
 	local series_path="${archive_dir}/series.conf"
 
+	# Must override the sunxi family default after the family config is sourced.
+	declare -g BOOTDELAY=-2
 	KERNELPATCHDIR="${KERNELPATCHDIR} vontar-h618"
 
 	if [[ -f "${series_path}" && -d "${patches_dir}" ]]; then
-		vontar_h618__series_ensure_patch \
-			"${series_path}" "${patches_dir}" \
-			"drv-mfd-ac200-add-support.patch" \
-			"0301-arm64-dts-sun50i-h616-add-emac1-rmii-pins.patch" \
-			"0201-drv-mfd-ac200-add-support.patch" \
-			"0202-drv-net-phy-ac200-ephy-add.patch"
+		# The public Vontar DTS and validated RC7 baseline use the legacy
+		# sunxi-gmac/AC200 path. Current Armbian's AC300/dwmac replacement
+		# expects a different DT binding and overwrites the working EMAC
+		# syscon state, causing an EMAC reset timeout on this board.
+		vontar_h618__series_remove_patch_line \
+			"${series_path}" "drv-net-phy-ac300-phy-add.patch"
+		vontar_h618__series_remove_patch_line \
+			"${series_path}" "drv-net-stmmac-dwmac-sun8i-add-h616-internal-phy.patch"
+
+		# Armbian patch sets are versioned independently.  Switch from the
+		# monolithic AC200 patch only when this archive actually provides both
+		# split replacements; older and future archives keep their own flow.
+		if [[ -f "${patches_dir}/0201-drv-mfd-ac200-add-support.patch" && \
+			-f "${patches_dir}/0202-drv-net-phy-ac200-ephy-add.patch" ]]; then
+			vontar_h618__series_remove_patch_line \
+				"${series_path}" "drv-mfd-ac200-add-support.patch"
+			vontar_h618__series_insert_patch_before \
+				"${series_path}" \
+				"0201-drv-mfd-ac200-add-support.patch" \
+				"0301-arm64-dts-sun50i-h616-add-emac1-rmii-pins.patch"
+			vontar_h618__series_insert_patch_before \
+				"${series_path}" \
+				"0202-drv-net-phy-ac200-ephy-add.patch" \
+				"0301-arm64-dts-sun50i-h616-add-emac1-rmii-pins.patch"
+		fi
 
 		vontar_h618__series_ensure_patch \
 			"${series_path}" "${patches_dir}" \

@@ -10,21 +10,30 @@ AXP313/r_i2c, broken-cd on mmc0 and eMMC on slot 2, while explicitly
 dropping the zero2w SPI-flash / fastboot / USB gadget extras that are
 not part of the working LAN baseline.
 
+Use a minimal microSD boot command because the default distro boot path can
+return to the prompt without selecting MMC on this board. It only supplies the
+three variables expected by Armbian's standard boot script and sources
+`/boot/boot.scr` from `mmc 0:1`. `CONFIG_BOOTDELAY=-2` prevents UART noise from
+aborting autoboot; the board file reasserts it after the sunxi family defaults.
+
 Assisted-by: Artjom W. <aco.art@gmail.com>
 ---
- configs/vontar_h618_zero2w_defconfig | 49 +++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 49 insertions(+)
+ configs/vontar_h618_zero2w_defconfig | 53 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
  create mode 100644 configs/vontar_h618_zero2w_defconfig
 
 diff --git a/configs/vontar_h618_zero2w_defconfig b/configs/vontar_h618_zero2w_defconfig
 new file mode 100644
 --- /dev/null
 +++ b/configs/vontar_h618_zero2w_defconfig
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,41 @@
 +CONFIG_ARM=y
 +CONFIG_ARCH_SUNXI=y
 +CONFIG_DEFAULT_DEVICE_TREE="allwinner/sun50i-h618-vontar-h618"
 +CONFIG_SPL=y
++CONFIG_USE_BOOTCOMMAND=y
++CONFIG_BOOTCOMMAND="setenv devtype mmc; setenv devnum 0:1; setenv prefix /boot/; mmc dev 0; ext4load mmc 0:1 ${scriptaddr} /boot/boot.scr; source ${scriptaddr}"
++CONFIG_BOOTDELAY=-2
 +CONFIG_DRAM_SUNXI_DX_ODT=0x03030303
 +CONFIG_DRAM_SUNXI_DX_DRI=0x0e0e0e0e
 +CONFIG_DRAM_SUNXI_CA_DRI=0x1c12
@@ -50,7 +59,8 @@ new file mode 100644
 +CONFIG_SUPPORT_EMMC_BOOT=y
 +CONFIG_MMC_IO_VOLTAGE=y
 +CONFIG_MMC_UHS_SUPPORT=y
-+CONFIG_ENV_IS_IN_FAT=y
++CONFIG_ENV_IS_NOWHERE=y
++# CONFIG_ENV_IS_IN_FAT is not set
 +CONFIG_PHY_REALTEK=y
 +CONFIG_SUN8I_EMAC=y
 +CONFIG_AXP_PMIC_BUS=y
