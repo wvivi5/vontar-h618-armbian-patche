@@ -79,18 +79,28 @@ your use.
 
 The tested stock remote uses the NEC protocol with address `0x01`. Its codes
 do not match `rc-beelink-gs1`. The image customization hook installs
-`ir-keytable`, copies the dedicated `vontar-h618.toml` table, and enables
-`vontar-h618-ir.service`. The service waits for `rc0`, so minimal and desktop
-images get the same mapping even when the input device appears late.
+`ir-keytable` and `python3-evdev`, copies the dedicated `vontar-h618.toml`
+table, and enables both Vontar input services. The IR service waits for `rc0`,
+so minimal and desktop images get the same mapping even when the input device
+appears late.
 
 All 12 physical buttons were observed in the runtime NEC capture. The
 navigation path was then verified after loading the table as real Linux input
-events: `KEY_LEFT`, `KEY_RIGHT`, and `KEY_OK` from `sunxi-ir`.
+events from `sunxi-ir`. OK is exported as `KEY_ENTER`, so it works in both the
+early OS menu and a Linux console.
+
+Power is deliberately two-stage on a text VT. The physical key is exported as
+the private trigger `KEY_PROG1`; `vontar-h618-power-key.service` clears the
+active shell line and types `poweroff` without Enter. Pressing OK/Enter then
+executes it. In a graphical VT the helper emits a standard virtual
+`KEY_POWER`, leaving the action to the desktop. Detection failures are
+fail-safe and never call poweroff automatically.
 
 To inspect the active mapping and service after boot:
 
 ```bash
 systemctl status vontar-h618-ir.service
+systemctl status vontar-h618-power-key.service
 ir-keytable -s rc0 -r
 ```
 
@@ -100,14 +110,14 @@ ir-keytable -s rc0 -r
 | Left | `0x151` | `KEY_LEFT` |
 | Up | `0x116` | `KEY_UP` |
 | Down | `0x11a` | `KEY_DOWN` |
-| OK | `0x113` | `KEY_OK` |
+| OK | `0x113` | `KEY_ENTER` |
 | Back | `0x119` | `KEY_BACK` |
 | Home | `0x111` | `KEY_HOME` |
 | Menu | `0x14c` | `KEY_MENU` |
 | Mouse/context | `0x100` | `KEY_CONTEXT_MENU` |
 | Volume up | `0x118` | `KEY_VOLUMEUP` |
 | Volume down | `0x110` | `KEY_VOLUMEDOWN` |
-| Power | `0x140` | `KEY_POWER` |
+| Power | `0x140` | `KEY_PROG1` handled contextually |
 
 ## Current Boot Notes
 
@@ -160,8 +170,8 @@ The remote workflow expects `sshpass` or `expect` on the host. The Windows
 - Optional manual MAC override: `userpatches/overlay/etc/modprobe.d/sunxi_gmac.conf`
   (normally unnecessary because `sunxi-gmac` derives a stable address from SID)
 - Board-specific Broadcom firmware payloads: `userpatches/overlay/lib/firmware/brcm/`
-- Stock remote keymap and boot service: `userpatches/overlay/etc/rc_keymaps/`
-  and `userpatches/overlay/etc/systemd/system/vontar-h618-ir.service`
+- Stock remote keymap and services: `userpatches/overlay/etc/rc_keymaps/` and
+  `userpatches/overlay/etc/systemd/system/`
 - Hardware profile: `userpatches/VONTAR_H618_HARDWARE.md`
 
 ## Status

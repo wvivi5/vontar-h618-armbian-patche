@@ -159,6 +159,7 @@ the board being prepared by the project U-Boot first.
 | Captured address | `0x01` |
 | Persistent table | `/etc/rc_keymaps/vontar-h618.toml` |
 | Loader | `vontar-h618-ir.service` |
+| Power helper | `vontar-h618-power-key.service` |
 
 The stock 12-button handset is not compatible with `rc-beelink-gs1`. Physical
 capture produced the following commands: right `0x50`, left `0x51`, up `0x16`,
@@ -168,9 +169,16 @@ down `0x1a`, OK `0x13`, back `0x19`, home `0x11`, menu `0x4c`, mouse/context
 `0x151`, and so on.
 
 The kernel DTS already enables `&ir`; no DTB change is needed. Image
-customization installs `ir-keytable`, the table, the wait-for-`rc0` loader, and
-the enabled systemd unit. After loading, physical left/right/OK presses were
-verified as `KEY_LEFT`, `KEY_RIGHT`, and `KEY_OK` evdev events.
+customization installs `ir-keytable`, `python3-evdev`, the table, the
+wait-for-`rc0` loader, and both enabled systemd units. OK is mapped to
+`KEY_ENTER` for the boot menu and text console.
+
+Power is mapped to `KEY_PROG1` so systemd-logind cannot shut down immediately.
+On a text VT with a foreground shell, the root helper clears the line and
+types `poweroff` without Enter. On a graphical VT it emits virtual
+`KEY_POWER`. Unknown VT modes and missing shells are ignored. A completed
+poweroff still requires physical power to start the box again; no IR wakeup is
+claimed, and the kernel/DTB remain unchanged.
 
 ## Wi-Fi/BT Power Sequence
 

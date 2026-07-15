@@ -33,8 +33,12 @@ Vontar H618 unit and close H616-class variants.
 - Stock remote IR is validated on 2026-07-15. Raw capture identified all 12
   physical NEC address-`0x01` buttons. The dedicated keymap was loaded and
   left/right/OK were confirmed as post-map evdev events from `sunxi-ir`.
-- New images install `ir-keytable` and enable `vontar-h618-ir.service`
-  automatically. The earlier `rc-beelink-gs1` assumption is rejected.
+- New images install `ir-keytable`, `python3-evdev`, and both Vontar input
+  services automatically. The earlier `rc-beelink-gs1` assumption is rejected.
+- OK is `KEY_ENTER`. Power is `KEY_PROG1`: on a text shell the root helper
+  types `poweroff` without Enter; on a graphical VT it forwards virtual
+  `KEY_POWER`. Console and graphical branches passed runtime checks without
+  executing poweroff or restarting the console.
 
 ## Active U-Boot Boot Policy
 

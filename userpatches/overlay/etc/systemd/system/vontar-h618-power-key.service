@@ -1,0 +1,13 @@
+[Unit]
+Description=Vontar H618 context-sensitive remote Power key
+Requires=vontar-h618-ir.service
+After=vontar-h618-ir.service tvbox-boot-menu.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/vontar-h618-power-key
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

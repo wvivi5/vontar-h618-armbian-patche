@@ -1,0 +1,174 @@
+#!/usr/bin/python3
+"""Context-sensitive handling for the Vontar H618 remote Power key."""
+
+from __future__ import annotations
+
+import fcntl
+import os
+import struct
+import time
+
+from evdev import InputDevice, UInput, ecodes, list_devices
+
+
+KDGETMODE = 0x4B3B
+KD_TEXT = 0x00
+KD_GRAPHICS = 0x01
+REMOTE_NAME = "sunxi-ir"
+SHELLS = {"ash", "bash", "busybox", "dash", "fish", "sh", "zsh"}
+COMMAND_KEYS = (
+    ecodes.KEY_P,
+    ecodes.KEY_O,
+    ecodes.KEY_W,
+    ecodes.KEY_E,
+    ecodes.KEY_R,
+    ecodes.KEY_O,
+    ecodes.KEY_F,
+    ecodes.KEY_F,
+)
+
+
+def log(message: str) -> None:
+    print(f"vontar-power-key: {message}", flush=True)
+
+
+def active_tty() -> tuple[str, int] | None:
+    try:
+        with open("/sys/class/tty/tty0/active", encoding="ascii") as handle:
+            name = handle.read().strip()
+    except OSError as exc:
+        log(f"cannot read active VT: {exc}")
+        return None
+    if not name.startswith("tty") or not name[3:].isdigit():
+        log(f"unsupported active VT: {name!r}")
+        return None
+
+    path = f"/dev/{name}"
+    try:
+        fd = os.open(path, os.O_RDWR | os.O_NOCTTY)
+        raw_mode = fcntl.ioctl(fd, KDGETMODE, struct.pack("I", 0))
+        mode = struct.unpack("I", raw_mode)[0]
+    except OSError as exc:
+        log(f"cannot query {path}: {exc}")
+        return None
+    finally:
+        if "fd" in locals():
+            os.close(fd)
+    return path, mode
+
+
+def foreground_shell(tty_path: str) -> str | None:
+    tty_number = os.stat(tty_path).st_rdev
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        try:
+            with open(f"{entry.path}/stat", encoding="ascii", errors="replace") as handle:
+                data = handle.read()
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue
+        closing = data.rfind(")")
+        if closing < 0:
+            continue
+        fields = data[closing + 2 :].split()
+        if len(fields) < 6:
+            continue
+        pid = int(entry.name)
+        tty_nr = int(fields[4])
+        foreground_pgrp = int(fields[5])
+        if tty_nr != tty_number or pid != foreground_pgrp:
+            continue
+        command = data[data.find("(") + 1 : closing]
+        return command if command in SHELLS else None
+    return None
+
+
+def tap(ui: UInput, keycode: int) -> None:
+    ui.write(ecodes.EV_KEY, keycode, 1)
+    ui.syn()
+    ui.write(ecodes.EV_KEY, keycode, 0)
+    ui.syn()
+
+
+def type_poweroff(ui: UInput) -> None:
+    ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTCTRL, 1)
+    ui.syn()
+    tap(ui, ecodes.KEY_U)
+    ui.write(ecodes.EV_KEY, ecodes.KEY_LEFTCTRL, 0)
+    ui.syn()
+    for keycode in COMMAND_KEYS:
+        tap(ui, keycode)
+
+
+def handle_power(ui: UInput) -> None:
+    current = active_tty()
+    if current is None:
+        log("Power ignored: active VT is unavailable")
+        return
+    tty_path, mode = current
+    if mode == KD_TEXT:
+        shell = foreground_shell(tty_path)
+        if shell is None:
+            log(f"Power ignored: no foreground shell on {tty_path}")
+            return
+        type_poweroff(ui)
+        log(f"typed poweroff on {tty_path} ({shell}); waiting for Enter")
+        return
+    if mode == KD_GRAPHICS:
+        tap(ui, ecodes.KEY_POWER)
+        log("forwarded standard KEY_POWER to graphical session")
+        return
+    log(f"Power ignored: unsupported KD mode {mode}")
+
+
+def find_remote() -> InputDevice | None:
+    for path in list_devices():
+        try:
+            device = InputDevice(path)
+        except OSError:
+            continue
+        if device.name == REMOTE_NAME:
+            return device
+        device.close()
+    return None
+
+
+def main() -> None:
+    capabilities = {
+        ecodes.EV_KEY: [
+            ecodes.KEY_LEFTCTRL,
+            ecodes.KEY_U,
+            ecodes.KEY_P,
+            ecodes.KEY_O,
+            ecodes.KEY_W,
+            ecodes.KEY_E,
+            ecodes.KEY_R,
+            ecodes.KEY_F,
+            ecodes.KEY_POWER,
+        ]
+    }
+    with UInput(capabilities, name="Vontar H618 power-key helper") as ui:
+        while True:
+            remote = find_remote()
+            if remote is None:
+                log("sunxi-ir input is unavailable; retrying")
+                time.sleep(1)
+                continue
+            log(f"listening on {remote.path}")
+            try:
+                for event in remote.read_loop():
+                    if (
+                        event.type == ecodes.EV_KEY
+                        and event.code == ecodes.KEY_PROG1
+                        and event.value == 1
+                    ):
+                        handle_power(ui)
+            except OSError as exc:
+                log(f"input disconnected: {exc}; retrying")
+                time.sleep(1)
+            finally:
+                remote.close()
+
+
+if __name__ == "__main__":
+    main()
