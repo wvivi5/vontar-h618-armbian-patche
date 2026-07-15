@@ -3,8 +3,11 @@
 Public Armbian `userpatches` payload and host-side bring-up tools for Vontar
 H618 and similar H616-class Allwinner TV boxes.
 
-The project goal is to boot Armbian from microSD with a dedicated project
-U-Boot/SPL path instead of relying on the stock Android or eMMC boot chain.
+Hardware and OS bring-up is complete for the tested 4 GiB unit as of
+2026-07-15. The reproducible public build path boots Armbian from microSD with
+a dedicated project U-Boot/SPL instead of relying on the stock Android chain.
+The final device deployment also validates Linux-default eMMC dual boot while
+preserving the original Android installation.
 
 ## Board Photos
 
@@ -38,6 +41,11 @@ See [VONTAR_H618_HARDWARE.md](userpatches/VONTAR_H618_HARDWARE.md) for full hard
   `Image` and the board DTB and maps `console=display` to `console=tty1`.
 - The stock NEC infrared remote is installed automatically with a validated
   12-button Vontar keymap; no Android or Beelink keymap is required.
+- The deployed eMMC layout preserves Android and provides a 30.9 GiB Linux
+  root partition. A fullscreen English menu defaults to Linux after 8 seconds;
+  Android is an explicit one-boot choice and its next reboot returns to Linux.
+- Ethernet, Wi-Fi, Bluetooth, HDMI/display, eMMC Linux boot, Android return,
+  IR navigation, console Enter, and the two-stage Power action are validated.
 
 ## Quick Start
 
@@ -176,9 +184,12 @@ The remote workflow expects `sshpass` or `expect` on the host. The Windows
 
 ## Status
 
-This repository is a board bring-up patch set for reproducible local builds. It
-is not an upstream Linux or U-Boot submission series. See
-`docs/known-status.md` before using it as a baseline for upstream work.
+There is no active hardware or OS bring-up blocker for the photographed and
+tested 4 GiB board. Further work is limited to verified regressions, other
+board/RAM variants, optional application deployment, or upstream preparation.
+This remains a reproducible local-build patch set rather than an upstream Linux
+or U-Boot submission series. See [known-status.md](docs/known-status.md) for the
+validation matrix and scope boundaries.
 
 ## Constraints
 

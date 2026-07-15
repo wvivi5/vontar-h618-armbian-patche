@@ -11,8 +11,8 @@ This file documents the tested Vontar H618 / H616-class TV box that this
 | Runtime/vendor identity | `apollo-p16` on the tested unit |
 | SoC class | Allwinner H616-class, marketed as H618 |
 | Validated DRAM variant | 4 GiB DDR3, 648 MHz |
-| Boot goal | Armbian from microSD with project U-Boot/SPL |
-| Android/eMMC boot chain | Not required for the Armbian boot path |
+| Boot goal | Armbian from microSD with project U-Boot/SPL; Linux-default eMMC deployment |
+| Android/eMMC boot chain | Android preserved; explicit one-boot selection from Linux-default eMMC |
 | Linux DTB | `allwinner/sun50i-h618-vontar-h618.dtb` |
 | Armbian board file | `userpatches/config/boards/vontar-h618.tvb` |
 
@@ -68,7 +68,11 @@ This payload is validated on the 4 GiB DDR3 Vontar H618 box.
   `devtype`, `devnum`, and `prefix` variables required by Armbian.
 - Linux images use the ARM64 `boot-sun50i-next.cmd` flow with `console=display`
   mapped to HDMI/display only. Use `console=both` for UART0 debug.
-- Full install-to-eMMC still needs runtime Linux validation after normal boot.
+- The final eMMC deployment is runtime validated: Linux boots by default from
+  GPT partition 26 (`armbian_root`, 30.9 GiB), while Android keeps 24 GiB
+  userdata and its original system partitions.
+- The fullscreen HDMI selector has an 8-second Linux default. Android is armed
+  for one boot only; a subsequent Android reboot returns to Linux.
 
 ## Built-In Ethernet
 

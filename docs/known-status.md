@@ -1,13 +1,27 @@
-# Known Status
+# Validated Status — Hardware/OS Complete
 
-This repository captures a working local bring-up baseline for one validated
-Vontar H618 unit and close H616-class variants.
+Hardware and OS bring-up is complete for the photographed 4 GiB DDR3 Vontar
+H618 unit as of 2026-07-15. There is no active validation blocker for that
+device; the detailed limits below prevent this result from being generalized
+to untested RAM sizes or board revisions.
+
+## Completion Scope
+
+- Project U-Boot/SPL boots Armbian independently from microSD.
+- The deployed eMMC boots Linux by default from a 30.9 GiB root partition
+  while preserving the original Android partitions and 24 GiB userdata.
+- A fullscreen English HDMI menu defaults to Linux after 8 seconds. Android is
+  an explicit one-boot selection; its next reboot returns to Linux.
+- Native Ethernet, Wi-Fi, Bluetooth discovery, HDMI/display, stock IR remote,
+  console OK/Enter, and safe two-stage Power handling are runtime validated.
+- No further rebuild, reflash, DTB change, or routine hardware validation is
+  required. Only a verified regression should reopen bring-up work.
 
 ## Current State
 
 - Validated target: 4 GiB DDR3 Vontar H618 unit documented in
   `userpatches/VONTAR_H618_HARDWARE.md`
-- Boot path target: microSD with project U-Boot/SPL
+- Public build path: microSD with project U-Boot/SPL
 - Kernel line target: Armbian `current` and `edge` for the Vontar board file
 - LAN bring-up depends on the matching U-Boot preinit sequence in this payload
 - Linux 7.0.14/Noble runtime is validated with restored `sunxi-gmac`: PHY
@@ -75,6 +89,9 @@ Vontar H618 unit and close H616-class variants.
 - Other RAM sizes and board revisions are not yet fully validated.
 - The IR table targets the photographed/tested 12-button remote. A different
   bundled handset may use another NEC address or command set.
+- A completed `poweroff` cannot wake by IR and still requires physical power.
+- Optional applications and services are outside the hardware/OS completion
+  status.
 
 ## Before Upstreaming
 
