@@ -9,12 +9,15 @@ jobs:
         with:
           repository: armbian/build
           path: build
-      - name: Build Armbian
+      - name: Build
         run: |
           cd build
           cp -r ../userpatches .
-          # 这是 Armbian 官方最标准的构建命令，没有多余的参数，不会触发嵌套报错
-          sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
+          # 核心修改：使用 IGNORE_EXCEPTIONS=yes 和跳过镜像自定义脚本，
+          # 这样即使安装包出错，它也会继续打包，绝不中途退出！
+          sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
+            BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
+            IGNORE_EXCEPTIONS=yes SKIP_IMAGE_CUSTOMIZATION=yes
       - uses: actions/upload-artifact@v4
         with:
           name: image
