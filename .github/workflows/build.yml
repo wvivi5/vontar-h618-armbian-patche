@@ -34,7 +34,7 @@ jobs:
           cd armbian-build
           sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
             BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
-            FORCE_DOCKER=yes
+            BUILD_ONLY=yes
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
