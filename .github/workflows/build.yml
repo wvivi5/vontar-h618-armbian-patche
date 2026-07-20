@@ -29,10 +29,10 @@ jobs:
           rm -rf userpatches
           ln -s ../vontar-h618-armbian-patche/userpatches userpatches
 
-        - name: Build Armbian image
+      - name: Build Armbian image
         run: |
           cd armbian-build
-          # BUILD_ONLY=yes 告诉 Armbian 直接在当前容器运行，不要再尝试套娃启动新 Docker
+          # 使用 BUILD_ONLY=yes 强制直接在当前容器中构建，跳过容器嵌套检测
           sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
             BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
             BUILD_ONLY=yes
