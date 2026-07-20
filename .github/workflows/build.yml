@@ -1,44 +1,22 @@
-name: Build Armbian Image
+name: Build
 on: [push, workflow_dispatch]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout project patches
-        uses: actions/checkout@v4
-        with:
-          path: vontar-h618-armbian-patche
-
-      - name: Checkout Armbian build
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: armbian/build
-          path: armbian-build
-
-      - name: Add Swap Space
+          path: build
+      - name: Build
         run: |
-          sudo fallocate -l 10G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
-
-      - name: Prepare build tree
-        run: |
-          cd armbian-build
-          rm -rf userpatches
-          ln -s ../vontar-h618-armbian-patche/userpatches userpatches
-
-      - name: Build Armbian image
-        run: |
-          cd armbian-build
-          # 使用 BUILD_ONLY=yes 强制直接在当前容器中构建，跳过容器嵌套检测
-          sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
-            BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
-            BUILD_ONLY=yes
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          cd build
+          # 将 userpatches 复制到 build 目录下，而不是链接
+          cp -r ../userpatches .
+          # 使用最基础的 build 参数，不加任何导致冲突的复杂选项
+          ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
+      - uses: actions/upload-artifact@v4
         with:
-          name: armbian-vontar-h618
-          path: armbian-build/output/images/*.img.xz
+          name: image
+          path: build/output/images/*.img.xz
