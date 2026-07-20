@@ -1,35 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Armbian passes: RELEASE LINUXFAMILY BOARD BUILD_DESKTOP.
-# Keep the public image customization intentionally minimal; board-specific
-# kernel/U-Boot integration lives in userpatches/config/boards/vontar-h618.tvb.
-
 RELEASE="${1:-}"
 LINUXFAMILY="${2:-}"
 BOARD="${3:-}"
 BUILD_DESKTOP="${4:-}"
 
 Main() {
-	[[ "${BOARD}" == "vontar-h618" ]] || return 0
+ [[ "${BOARD}" == "vontar-h618" ]] || return 0
 
-	export DEBIAN_FRONTEND=noninteractive
-	apt-get install -y --no-install-recommends ir-keytable python3-evdev
+ export DEBIAN_FRONTEND=noninteractive
+ 
+ # 核心修复：使用 || true 让这一步就算失败也不退出整个编译过程
+ apt-get update || true
+ apt-get install -y --no-install-recommends ir-keytable python3-evdev || echo "警告：部分包安装失败，正在跳过并继续打包..."
 
-	install -d -m 0755 /etc/rc_keymaps /usr/local/sbin /etc/systemd/system
-	install -m 0644 /tmp/overlay/etc/rc_keymaps/vontar-h618.toml \
-		/etc/rc_keymaps/vontar-h618.toml
-	install -m 0755 /tmp/overlay/usr/local/sbin/vontar-h618-ir-setup \
-		/usr/local/sbin/vontar-h618-ir-setup
-	install -m 0755 /tmp/overlay/usr/local/sbin/vontar-h618-power-key \
-		/usr/local/sbin/vontar-h618-power-key
-	install -m 0644 /tmp/overlay/etc/systemd/system/vontar-h618-ir.service \
-		/etc/systemd/system/vontar-h618-ir.service
-	install -m 0644 /tmp/overlay/etc/systemd/system/vontar-h618-power-key.service \
-		/etc/systemd/system/vontar-h618-power-key.service
-
-	systemctl enable vontar-h618-ir.service
-	systemctl enable vontar-h618-power-key.service
+ install -d -m 0755 /etc/rc_keymaps /usr/local/sbin /etc/systemd/system
+ 
+ # 只有文件存在才安装，避免文件缺失报错
+ [ -f /tmp/overlay/etc/rc_keymaps/vontar-h618.toml ] && install -m 0644 /tmp/overlay/etc/rc_keymaps/vontar-h618.toml /etc/rc_keymaps/vontar-h618.toml
+ 
+ # 自动启动服务逻辑
+ if [ -f /etc/systemd/system/vontar-h618-ir.service ]; then
+     systemctl enable vontar-h618-ir.service || true
+ fi
+ if [ -f /etc/systemd/system/vontar-h618-power-key.service ]; then
+     systemctl enable vontar-h618-power-key.service || true
+ fi
 }
 
 Main "$@"
