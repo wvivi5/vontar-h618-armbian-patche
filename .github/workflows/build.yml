@@ -9,13 +9,12 @@ jobs:
         with:
           repository: armbian/build
           path: build
-      - name: Build
+      - name: Build Armbian
         run: |
           cd build
-          # 将 userpatches 复制到 build 目录下，而不是链接
           cp -r ../userpatches .
-          # 使用最基础的 build 参数，不加任何导致冲突的复杂选项
-          ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
+          # 这是 Armbian 官方最标准的构建命令，没有多余的参数，不会触发嵌套报错
+          sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no
       - uses: actions/upload-artifact@v4
         with:
           name: image
