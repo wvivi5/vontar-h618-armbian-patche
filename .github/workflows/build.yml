@@ -1,25 +1,91 @@
-name: Build
-on: [push, workflow_dispatch]
+name: Build Vontar H618 Armbian Image
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          echo "Disk space after cleanup:"
+          df -h
+
+      - name: Checkout Armbian Build Framework
+        uses: actions/checkout@v4
         with:
           repository: armbian/build
           path: build
-      - name: Build
+
+      - name: Prepare Userpatches & Run Armbian Build (Edge / Latest Kernel)
         run: |
           cd build
           cp -r ../userpatches .
-          # 去掉 SKIP_IMAGE_CUSTOMIZATION，我们改用 IGNORE_EXCEPTIONS=yes 
-          # 这样它会尝试打包，即便有错误也会继续输出
-          sudo ./compile.sh BOARD=vontar-h618 BRANCH=current RELEASE=trixie \
-            BUILD_DESKTOP=no BUILD_MINIMAL=yes KERNEL_CONFIGURE=no \
+          chmod +x userpatches/customize-image.sh
+
+          # 执行 Armbian 源码构建
+          # BRANCH=edge 使用最新内核
+          # BUILD_MINIMAL=yes (轻量系统 + customize-image.sh 预装 docker)
+          sudo ./compile.sh \
+            BOARD=vontar-h618 \
+            BRANCH=edge \
+            RELEASE=trixie \
+            BUILD_DESKTOP=no \
+            BUILD_MINIMAL=yes \
+            KERNEL_CONFIGURE=no \
             IGNORE_EXCEPTIONS=yes
-      - uses: actions/upload-artifact@v4
+
+      - name: Inspect and Compress Built Images
+        run: |
+          mkdir -p release_files
+          echo "=== Output Images ==="
+          ls -la build/output/images/ || true
+
+          cd build/output/images/
+          for img in *.img; do
+            if [ -f "$img" ]; then
+              echo "Compressing $img..."
+              xz -T 0 -v -9 "$img" || gzip -9 "$img"
+            fi
+          done
+
+          mv *.img.xz *.img.gz ../../../release_files/ 2>/dev/null || mv * ../../../release_files/ 2>/dev/null || true
+          cd ../../../
+          ls -la release_files/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: all-build-output
-          # 上传整个 output 目录，看看里面到底生成了什么
-          path: build/output/
+          name: Armbian_Vontar_H618_Edge_Docker
+          path: release_files/*
+
+      - name: Create Release on Tag / Dispatch
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_files/*
+          name: "Vontar H618 Armbian Edge (Latest Kernel + Docker)"
+          tag_name: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
+          body: |
+            ## Vontar H618 Custom Armbian Image (Edge Branch)
+            - **Kernel Branch**: `edge` (Latest Linux Kernel)
+            - **Pre-installed**: Docker & Docker Compose (`docker.io`, `docker-compose-v2`)
+            - **U-Boot & Board Patch**: Project U-Boot for Vontar H618 (sun50i-h618-vontar-h618.dtb)
+            - **Features**: NEC IR Remote Keymap, Restored sunxi-gmac LAN driver, eMMC Dual-boot Android support preserved
+            - **Boot Method**: microSD boot + USB HDD / microSD rootfs
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
