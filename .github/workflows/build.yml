@@ -49,20 +49,26 @@ jobs:
 
       - name: Inspect and Compress Built Images
         run: |
+          set -x
           mkdir -p release_files
           echo "=== Output Images ==="
-          ls -la build/output/images/ || true
+          sudo ls -la build/output/images/ || true
+
+          # 修好属主，避免 root 拥有目录导致 Permission denied
+          sudo chown -R "$(id -u):$(id -g)" build/output/images/
 
           cd build/output/images/
           for img in *.img; do
             if [ -f "$img" ]; then
-              echo "Compressing $img..."
-              xz -T 0 -v -9 "$img" || gzip -9 "$img"
+              echo "Compressing $img with gzip..."
+              gzip -9 -v "$img"
             fi
           done
 
-          mv *.img.xz *.img.gz ../../../release_files/ 2>/dev/null || mv * ../../../release_files/ 2>/dev/null || true
+          # 搬运所有产物（压缩镜像 + sha + txt 说明）到工作区
+          cp -v *.img.gz *.img.sha *.img.txt ../../../release_files/ 2>/dev/null || true
           cd ../../../
+          echo "=== release_files ==="
           ls -la release_files/
 
       - name: Upload Artifact
