@@ -36,11 +36,11 @@ jobs:
           chmod +x userpatches/customize-image.sh
 
           # 执行 Armbian 源码构建
-          # BRANCH=edge 使用最新内核
+          # BRANCH=current 使用最新内核
           # BUILD_MINIMAL=yes (轻量系统 + customize-image.sh 预装 docker)
           sudo ./compile.sh \
             BOARD=vontar-h618 \
-            BRANCH=edge \
+            BRANCH=current \
             RELEASE=trixie \
             BUILD_DESKTOP=no \
             BUILD_MINIMAL=yes \
@@ -82,7 +82,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
-          name: "Vontar H618 Armbian Edge (Latest Kernel + Docker)"
+          name: "Vontar H618 Armbian Current LTS (Latest Kernel + Docker)"
           tag_name: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
           body: |
             ## Vontar H618 Custom Armbian Image (Edge Branch)
