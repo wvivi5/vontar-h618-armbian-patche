@@ -3,6 +3,22 @@
 Public Armbian `userpatches` payload and host-side bring-up tools for Vontar
 H618 and similar H616-class Allwinner TV boxes.
 
+## 首启自动迁移到 USB 硬盘（TF 引导 + 硬盘运行）
+
+本镜像面向**无 eMMC** 机型：**TF 卡负责引导（U-Boot + 内核 + /boot），系统 rootfs 自动迁移到 USB 硬盘运行**。
+
+**使用（全傻瓜三步）：**
+1. 用 balenaEtcher 把 `.img.gz` 烧到 TF 卡（免解压）。
+2. **插上 USB 硬盘**（空盘/可清空的盘，首启会全盘格式化）。
+3. 开机等着。首启服务 `vontar-h618-migrate.service` 会自动：检测第一块 >=3GB 的 USB 硬盘 -> GPT 分区 -> mkfs.ext4 -> rsync 整个 rootfs -> 写回 TF 卡 `armbianEnv.txt` 的 `rootdev=UUID=<硬盘>` -> 重启切换到硬盘运行。
+
+**行为说明：**
+- **没插硬盘**：不迁移、不打标记，系统正常在 TF 卡上跑；以后插上硬盘重启即自动迁移。
+- **已迁移**：打标记 `/var/lib/vontar-h618-migrated`，之后开机不再重复迁移（以后加硬盘/U 盘不受影响）。
+- **手动触发**：首启没插硬盘、后来才插上时，SSH 进去运行 `vontar-h618-migrate-now`（确认 y）即可迁移，无需等重启。
+
+---
+
 Hardware and OS bring-up is complete for the tested 4 GiB unit as of
 2026-07-15. The reproducible public build path boots Armbian from microSD with
 a dedicated project U-Boot/SPL instead of relying on the stock Android chain.

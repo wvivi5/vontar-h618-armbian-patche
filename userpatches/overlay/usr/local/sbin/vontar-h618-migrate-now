@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# vontar-h618-migrate-now
+# 手动触发把系统迁移到 USB 硬盘（当首启时没插硬盘、后来才插上时用）。
+# 实质就是清掉"已迁移"标记后调用自动迁移脚本。
+set -euo pipefail
+
+DONE_FLAG=/var/lib/vontar-h618-migrated
+
+echo "=== H618 手动迁移 rootfs 到 USB 硬盘 ==="
+echo "⚠️ 会把检测到的第一块 USB 硬盘全盘格式化并迁移系统。"
+echo "   当前已插入的块设备："
+lsblk -o NAME,TYPE,SIZE,MODEL,MOUNTPOINT 2>/dev/null || lsblk
+
+if [ "${1:-}" != "-y" ]; then
+    printf "确认继续？输入 y 回车: "
+    read -r ans
+    case "$ans" in
+        y|Y) ;;
+        *) echo "已取消。"; exit 0 ;;
+    esac
+fi
+
+# 清掉标记，让自动脚本重新执行一次
+rm -f "$DONE_FLAG" /boot/.vontar-h618-migrated 2>/dev/null || true
+
+echo "[*] 调用迁移脚本..."
+exec /usr/local/sbin/vontar-h618-migrate-rootfs

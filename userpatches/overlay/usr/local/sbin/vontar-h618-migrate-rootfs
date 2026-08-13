@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# vontar-h618-migrate-rootfs
+# 把 rootfs 迁移到 USB 硬盘（TF 引导 + 硬盘运行）。
+#
+# 两种调用模式：
+#   --firstboot   首启服务调用：仅当"首次开机且已插硬盘"时自动迁移（无人值守，不做交互确认）。
+#                 首启若没插硬盘 -> 打"首启已过"标记，之后不再自动迁移。
+#   （无参数）     手动/触发调用：必须两次确认"清空整盘"才执行。
+#
+# 设计（用户 2026-08-13 最终确认，方案 A）：
+#   - 首启+有盘 -> 自动 dd（此时是全新烧录，用户就是冲着装系统来的）。
+#   - 首启无盘 -> 跑 TF 卡，打 firstboot-done 标记，之后不再自动。
+#   - 运行后插盘 -> 由 udev 触发广播提示（见 vontar-h618-disk-notify），不自动迁移。
+#   - 想迁移 -> 手动 vontar-h618-migrate-now（两次清盘确认）。
+#   - 已迁移 -> 打 migrated 标记，永不重复。
+set -euo pipefail
+
+MODE="${1:-manual}"
+
+LOG=/var/log/vontar-h618-migrate.log
+MIGRATED_FLAG=/var/lib/vontar-h618-migrated        # 已成功迁移到硬盘
+FIRSTBOOT_FLAG=/var/lib/vontar-h618-firstboot-done  # 首启已过（无论有没有迁移）
+BOOT_ENV=/boot/armbianEnv.txt
+MIN_DISK_BYTES=$((3*1024*1024*1024))   # 目标盘至少 3GB
+
+log() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
+
+# 已迁移过 -> 任何模式都直接退出
+if [ -f "$MIGRATED_FLAG" ]; then
+    [ "$MODE" = "--firstboot" ] || echo "系统已迁移到硬盘，无需再次迁移。"
+    exit 0
+fi
+
+# ---- 探测目标 USB 硬盘：第一块 disk、非 mmcblk/zram/loop、非根所在盘、>=MIN ----
+find_target() {
+    local root_src root_disk name type size
+    root_src="$(findmnt -no SOURCE / || true)"
+    root_disk="$(lsblk -no PKNAME "$root_src" 2>/dev/null || true)"
+    while read -r name type size _; do
+        [ "$type" = "disk" ] || continue
+        case "$name" in
+            mmcblk*|zram*|loop*|ram*) continue ;;
+        esac
+        [ -n "$root_disk" ] && [ "$name" = "$root_disk" ] && continue
+        if [ "$size" -ge "$MIN_DISK_BYTES" ]; then
+            echo "/dev/$name"; return 0
+        fi
+    done < <(lsblk -bdno NAME,TYPE,SIZE)
+    return 1
+}
+
+# ===================== 首启模式 =====================
+if [ "$MODE" = "--firstboot" ]; then
+    # 首启已过 -> 不再自动
+    if [ -f "$FIRSTBOOT_FLAG" ]; then
+        exit 0
+    fi
+    log "=== 首启检测 USB 硬盘 ==="
+    if TARGET="$(find_target)"; then
+        log "首启检测到硬盘 $TARGET，自动迁移系统。"
+        do_migrate "$TARGET" "firstboot"
+    else
+        log "首启未检测到 >=3GB USB 硬盘，系统在 TF 卡上运行。打首启标记，之后不再自动迁移。"
+        touch "$FIRSTBOOT_FLAG"
+    fi
+    exit 0
+fi
+
+# ===================== 手动模式（两次清盘确认）=====================
+manual_confirm_and_migrate() {
+    echo "=== H618 迁移 rootfs 到 USB 硬盘（手动）==="
+    if ! TARGET="$(find_target)"; then
+        echo "[X] 未检测到 >=3GB 的 USB 硬盘，无法迁移。请先插好硬盘。"
+        exit 1
+    fi
+    local model size
+    model="$(lsblk -dno MODEL "$TARGET" 2>/dev/null | xargs || true)"
+    size="$(lsblk -dno SIZE "$TARGET" 2>/dev/null || true)"
+    echo ""
+    echo "  目标硬盘: $TARGET  容量:$size  型号:${model:-未知}"
+    echo "  当前分区/内容："
+    lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$TARGET" 2>/dev/null || true
+    echo ""
+    echo "  ⚠️⚠️  这将【全盘格式化 $TARGET】，盘上所有数据将【永久清空】！ ⚠️⚠️"
+
+    if [ "${1:-}" = "-y" ]; then
+        log "手动迁移 -y 跳过交互（调用方已确认）。"
+    else
+        printf "  第 1/2 次确认 —— 确定要清空并迁移吗？输入 yes 回车: "
+        read -r a1; [ "$a1" = "yes" ] || { echo "已取消。"; exit 0; }
+        printf "  第 2/2 次确认 —— 再次确认【整盘数据清空】，输入盘名 %s 回车: " "$TARGET"
+        read -r a2; [ "$a2" = "$TARGET" ] || { echo "输入不匹配，已取消。"; exit 0; }
+    fi
+    do_migrate "$TARGET" "manual"
+}
+
+# ===================== 实际迁移 =====================
+do_migrate() {
+    local TARGET="$1" WHY="$2"
+    log "=== 开始迁移 rootfs 到 $TARGET （模式:$WHY）==="
+
+    local PART="${TARGET}1"
+    case "$TARGET" in *nvme*|*mmcblk*) PART="${TARGET}p1" ;; esac
+
+    log "1/5 建立 GPT + 单分区..."
+    wipefs -a "$TARGET" >>"$LOG" 2>&1 || true
+    if command -v sgdisk >/dev/null 2>&1; then
+        sgdisk --zap-all "$TARGET" >>"$LOG" 2>&1 || true
+        sgdisk -n 1:0:0 -t 1:8300 -c 1:"h618-rootfs" "$TARGET" >>"$LOG" 2>&1
+    else
+        parted -s "$TARGET" mklabel gpt >>"$LOG" 2>&1
+        parted -s "$TARGET" mkpart primary ext4 1MiB 100% >>"$LOG" 2>&1
+    fi
+    partprobe "$TARGET" >>"$LOG" 2>&1 || true
+    udevadm settle >>"$LOG" 2>&1 || true
+    sleep 2
+
+    log "2/5 格式化 $PART 为 ext4..."
+    mkfs.ext4 -F -L h618-root "$PART" >>"$LOG" 2>&1
+    udevadm settle >>"$LOG" 2>&1 || true
+    local NEW_UUID
+    NEW_UUID="$(blkid -s UUID -o value "$PART")"
+    log "硬盘分区 UUID: $NEW_UUID"
+
+    log "3/5 rsync 复制 rootfs 到硬盘..."
+    local MNT=/mnt/h618-newroot
+    mkdir -p "$MNT"
+    mount "$PART" "$MNT"
+    rsync -aHAXx \
+        --exclude='/dev/*' --exclude='/proc/*' --exclude='/sys/*' \
+        --exclude='/tmp/*' --exclude='/run/*' --exclude='/mnt/*' \
+        --exclude='/media/*' --exclude='/lost+found' \
+        --exclude='/var/log/vontar-h618-migrate.log' \
+        / "$MNT/" >>"$LOG" 2>&1
+    mkdir -p "$MNT"/{dev,proc,sys,tmp,run,mnt,media}
+    chmod 1777 "$MNT/tmp"
+
+    log "4/5 更新新根 /etc/fstab 指向新 UUID..."
+    [ -f "$MNT/etc/fstab" ] && \
+        sed -i -E "s|^UUID=[0-9a-fA-F-]+[[:space:]]+/[[:space:]]|UUID=$NEW_UUID / |" "$MNT/etc/fstab"
+
+    log "5/5 更新 TF 卡 armbianEnv.txt 的 rootdev..."
+    if grep -q '^rootdev=' "$BOOT_ENV"; then
+        sed -i -E "s|^rootdev=.*|rootdev=UUID=$NEW_UUID|" "$BOOT_ENV"
+    else
+        echo "rootdev=UUID=$NEW_UUID" >> "$BOOT_ENV"
+    fi
+    grep -q '^rootfstype=' "$BOOT_ENV" && \
+        sed -i -E "s|^rootfstype=.*|rootfstype=ext4|" "$BOOT_ENV" || \
+        echo "rootfstype=ext4" >> "$BOOT_ENV"
+
+    sync; umount "$MNT" || true
+
+    # 打两个标记：已迁移 + 首启已过（写 TF 卡引导分区，切到硬盘后仍可见）
+    touch "$MIGRATED_FLAG" "$FIRSTBOOT_FLAG"
+    cp -f "$MIGRATED_FLAG" /boot/.vontar-h618-migrated 2>/dev/null || true
+
+    log "=== 迁移完成！rootfs 在 $PART (UUID=$NEW_UUID)。3 秒后重启切换到硬盘。==="
+    sync; sleep 3
+    systemctl reboot
+}
+
+manual_confirm_and_migrate "${1:-}"

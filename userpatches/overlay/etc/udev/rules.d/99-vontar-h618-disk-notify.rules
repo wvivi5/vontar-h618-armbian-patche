@@ -1,0 +1,3 @@
+# Vontar H618: 热插入 USB 硬盘时广播提示（不自动迁移）。方案 A。
+# 只对整盘 sd* 的 add 事件触发。
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="sd[a-z]", ENV{DEVTYPE}=="disk", RUN+="/usr/local/sbin/vontar-h618-disk-notify %k"

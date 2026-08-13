@@ -1,0 +1,18 @@
+[Unit]
+Description=Vontar H618 first-boot rootfs migration to USB HDD
+DefaultDependencies=no
+After=local-fs.target systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+Before=docker.service multi-user.target
+ConditionPathExists=!/var/lib/vontar-h618-firstboot-done
+ConditionPathExists=!/var/lib/vontar-h618-migrated
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vontar-h618-migrate-rootfs --firstboot
+RemainAfterExit=yes
+TimeoutStartSec=1800
+StandardOutput=journal+console
+
+[Install]
+WantedBy=multi-user.target

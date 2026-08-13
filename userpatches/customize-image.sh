@@ -35,6 +35,23 @@ Main() {
       systemctl enable vontar-h618-power-key.service || true
   fi
 
+  # 4. 首启自动迁移 rootfs 到 USB 硬盘 + 运行后插盘广播提示（用户 2026-08-13 需求，方案 A）
+  echo "=== [vontar-h618] Enabling rootfs migration (firstboot auto / runtime manual) ==="
+  for f in vontar-h618-migrate-rootfs vontar-h618-migrate-now vontar-h618-disk-notify; do
+      if [ -f "/tmp/overlay/usr/local/sbin/$f" ]; then
+          install -m 0755 "/tmp/overlay/usr/local/sbin/$f" "/usr/local/sbin/$f"
+      fi
+  done
+  # udev 规则：运行后热插 USB 硬盘广播提示（不自动迁移）
+  install -d -m 0755 /etc/udev/rules.d
+  [ -f /tmp/overlay/etc/udev/rules.d/99-vontar-h618-disk-notify.rules ] && \
+      install -m 0644 /tmp/overlay/etc/udev/rules.d/99-vontar-h618-disk-notify.rules /etc/udev/rules.d/99-vontar-h618-disk-notify.rules
+  # 迁移依赖工具（rsync/gdisk/e2fsprogs/parted 一般已在，缺则补）
+  apt-get install -y --no-install-recommends rsync gdisk e2fsprogs parted util-linux || echo "警告：迁移依赖部分安装失败"
+  if [ -f /etc/systemd/system/vontar-h618-migrate.service ]; then
+      systemctl enable vontar-h618-migrate.service || true
+  fi
+
   echo "=== [vontar-h618] Customize image completed ==="
 }
 

@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# vontar-h618-disk-notify
+# 运行在 TF 卡后、热插入 USB 硬盘时由 udev 触发。
+# 不自动迁移，只广播提示：想装系统请手动运行 vontar-h618-migrate-now。
+# 方案 A（用户 2026-08-13 确认）。
+set -euo pipefail
+
+MIGRATED_FLAG=/var/lib/vontar-h618-migrated
+DEV="${1:-}"
+
+# 已迁移到硬盘 -> 不提示
+[ -f "$MIGRATED_FLAG" ] && exit 0
+# 无设备名 -> 退出
+[ -n "$DEV" ] || exit 0
+
+# 只对整盘 sd* 提示（分区/非磁盘忽略）
+case "$DEV" in
+    sd[a-z]) ;;
+    *) exit 0 ;;
+esac
+
+# 排除根所在盘
+ROOT_SRC="$(findmnt -no SOURCE / 2>/dev/null || true)"
+ROOT_DISK="$(lsblk -no PKNAME "$ROOT_SRC" 2>/dev/null || true)"
+[ "$DEV" = "$ROOT_DISK" ] && exit 0
+
+SIZE="$(lsblk -bdno SIZE "/dev/$DEV" 2>/dev/null || echo 0)"
+[ "$SIZE" -ge $((3*1024*1024*1024)) ] || exit 0
+HSIZE="$(lsblk -dno SIZE "/dev/$DEV" 2>/dev/null || echo '?')"
+
+MSG="[H618] 检测到新 USB 硬盘 /dev/$DEV ($HSIZE)。
+系统当前运行在 TF 卡上。此硬盘默认作为存储盘，不会自动改动。
+如需把系统迁移到该硬盘（会【清空整盘】），请 SSH 运行:  vontar-h618-migrate-now
+（本提示仅告知，不会自动迁移。）"
+
+# 广播到所有已登录终端
+echo "$MSG" | wall 2>/dev/null || true
+logger -t vontar-h618-disk-notify "new USB disk /dev/$DEV ($HSIZE); run vontar-h618-migrate-now to migrate"
+exit 0
