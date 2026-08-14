@@ -1,0 +1,148 @@
+name: Build Vontar H618 Split Artifacts
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  boot:
+    name: 2a - U-Boot and DTB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Checkout Armbian Build Framework
+        uses: actions/checkout@v4
+        with:
+          repository: armbian/build
+          path: build
+
+      - name: Build U-Boot and board DTB
+        working-directory: build
+        run: |
+          set -euxo pipefail
+          cp -r ../userpatches .
+          chmod +x userpatches/customize-image.sh
+
+          ./compile.sh uboot \
+            BOARD=vontar-h618 \
+            BRANCH=current \
+            RELEASE=trixie \
+            IGNORE_EXCEPTIONS=yes
+
+          ./compile.sh kernel-dtb \
+            BOARD=vontar-h618 \
+            BRANCH=current \
+            RELEASE=trixie \
+            KERNEL_CONFIGURE=no \
+            IGNORE_EXCEPTIONS=yes
+
+      - name: Collect 2a boot artifacts
+        run: |
+          set -euxo pipefail
+          mkdir -p split_files
+
+          find build -type f -name 'linux-u-boot-vontar-h618-current*.deb' \
+            -exec cp -v {} split_files/ \;
+          find build -type f -name 'sun50i-h618-vontar-h618.dtb' \
+            -exec cp -v {} split_files/ \;
+
+          test -n "$(find split_files -type f -name 'linux-u-boot-*.deb' -print -quit)"
+          test -n "$(find split_files -type f -name 'sun50i-h618-vontar-h618.dtb' -print -quit)"
+          sha256sum split_files/* > split_files/SHA256SUMS-2a-Boot-DTB
+
+      - name: Upload 2a artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vontar_H618_Split_2a_Boot_DTB
+          path: split_files/*
+
+  rootfs:
+    name: 2b - Rootfs without boot configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Checkout Armbian Build Framework
+        uses: actions/checkout@v4
+        with:
+          repository: armbian/build
+          path: build
+
+      - name: Build rootfs artifact
+        working-directory: build
+        run: |
+          set -euxo pipefail
+          cp -r ../userpatches .
+          chmod +x userpatches/customize-image.sh
+
+          ./compile.sh rootfs \
+            BOARD=vontar-h618 \
+            RELEASE=trixie \
+            BUILD_MINIMAL=yes \
+            BUILD_DESKTOP=no \
+            IGNORE_EXCEPTIONS=yes
+
+      - name: Collect 2b rootfs artifact
+        run: |
+          set -euxo pipefail
+          mkdir -p split_files
+          find build -type f -name 'rootfs-*.tar.zst' -exec cp -v {} split_files/ \;
+          test -n "$(find split_files -type f -name 'rootfs-*.tar.zst' -print -quit)"
+          sha256sum split_files/* > split_files/SHA256SUMS-2b-Rootfs
+
+      - name: Upload 2b artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vontar_H618_Split_2b_Rootfs
+          path: split_files/*
+
+  release:
+    name: Publish split artifacts
+    needs: [ boot, rootfs ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download 2a artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Vontar_H618_Split_2a_Boot_DTB
+          path: release_files/2a
+
+      - name: Download 2b artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Vontar_H618_Split_2b_Rootfs
+          path: release_files/2b
+
+      - name: Publish split release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: split-latest
+          name: Vontar H618 Split Artifacts (U-Boot + DTB + Rootfs)
+          body: |
+            ## Vontar H618 split artifacts
+            - `2a/`: U-Boot and board DTB boot layer.
+            - `2b/`: rootfs system layer without boot configuration.
+          files: release_files/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
