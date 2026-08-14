@@ -94,7 +94,7 @@ jobs:
           cp -r ../userpatches .
           chmod +x userpatches/customize-image.sh
 
-          ./compile.sh rootfs \
+          sudo ./compile.sh rootfs \
             BOARD=vontar-h618 \
             RELEASE=trixie \
             BUILD_MINIMAL=yes \
