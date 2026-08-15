@@ -179,7 +179,7 @@ diff --speed-large-files --no-dereference --minimal -Naur linux-6.6/arch/arm64/b
 +&emac1 {
 +	pinctrl-names = "default";
 +	pinctrl-0 = <&rmii_pins>;
-+	phy-mode = "rmii";
++	phy-mode = "rgmii-id";
 +	status = "okay";
 +};
 +
