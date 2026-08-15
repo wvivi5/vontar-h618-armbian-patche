@@ -111,21 +111,43 @@ jobs:
           image="$(find build/output/images -maxdepth 2 -type f -name '*.img' -print -quit)"
           test -n "$image"
 
-          loop="$(sudo losetup --find --show --partscan "$image")"
           mount_dir="$(mktemp -d)"
           cleanup() {
             sudo umount "$mount_dir" 2>/dev/null || true
-            sudo losetup -d "$loop" 2>/dev/null || true
             rmdir "$mount_dir" 2>/dev/null || true
           }
           trap cleanup EXIT
 
-          root_partition="$(lsblk -lnpo NAME,FSTYPE "$loop" | awk '$2 == "ext4" { print $1; exit }')"
-          test -n "$root_partition"
-          sudo mount -o ro "$root_partition" "$mount_dir"
+          # Parse the first Linux partition directly from the MBR. GitHub runners
+          # do not reliably create /dev/loopXp1 after losetup --partscan.
+          start_sector="$(python3 - "$image" <<'PY'
+          import struct
+          import sys
+
+          with open(sys.argv[1], "rb") as image_file:
+              mbr = image_file.read(512)
+
+          if len(mbr) != 512 or mbr[510:512] != b"\x55\xaa":
+              raise SystemExit("invalid MBR signature")
+
+          for index in range(4):
+              entry = mbr[446 + index * 16:462 + index * 16]
+              partition_type = entry[4]
+              start, sectors = struct.unpack_from("<II", entry, 8)
+              if partition_type == 0x83 and sectors:
+                  print(start)
+                  break
+          else:
+              raise SystemExit("Linux root partition not found in MBR")
+          PY
+          )"
+          test "$start_sector" -gt 0
+          root_offset="$((start_sector * 512))"
+          sudo mount -o "ro,loop,offset=$root_offset" "$image" "$mount_dir"
 
           # Reject a generic Armbian cache: 2b must contain project customization.
-          test -x "$mount_dir/usr/bin/docker"
+          test -x "$mount_dir/usr/sbin/dockerd"
+          test -L "$mount_dir/etc/systemd/system/multi-user.target.wants/docker.service"
           test -x "$mount_dir/usr/local/sbin/vontar-h618-migrate-rootfs"
           test -f "$mount_dir/etc/systemd/system/vontar-h618-migrate.service"
 

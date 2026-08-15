@@ -27,13 +27,20 @@ Main() {
   install -d -m 0755 /etc/rc_keymaps /usr/local/sbin /etc/systemd/system
   
   [ -f /tmp/overlay/etc/rc_keymaps/vontar-h618.toml ] && install -m 0644 /tmp/overlay/etc/rc_keymaps/vontar-h618.toml /etc/rc_keymaps/vontar-h618.toml
-  
-  if [ -f /etc/systemd/system/vontar-h618-ir.service ]; then
-      systemctl enable vontar-h618-ir.service || true
-  fi
-  if [ -f /etc/systemd/system/vontar-h618-power-key.service ]; then
-      systemctl enable vontar-h618-power-key.service || true
-  fi
+
+  # Armbian exposes the project overlay at /tmp/overlay during customization,
+  # but does not copy these service units into the image automatically.
+  for service in vontar-h618-ir.service vontar-h618-power-key.service vontar-h618-migrate.service; do
+      if [ -f "/tmp/overlay/etc/systemd/system/$service" ]; then
+          install -m 0644 "/tmp/overlay/etc/systemd/system/$service" "/etc/systemd/system/$service"
+      fi
+  done
+
+  for service in vontar-h618-ir.service vontar-h618-power-key.service; do
+      if [ -f "/etc/systemd/system/$service" ]; then
+          systemctl enable "$service" || true
+      fi
+  done
 
   # 4. 首启自动迁移 rootfs 到 USB 硬盘 + 运行后插盘广播提示（用户 2026-08-13 需求，方案 A）
   echo "=== [vontar-h618] Enabling rootfs migration (firstboot auto / runtime manual) ==="
