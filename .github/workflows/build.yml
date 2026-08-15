@@ -1,9 +1,11 @@
-name: Build Vontar H618 Armbian Image
+name: 构建 Vontar H618 Armbian 镜像
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches:
+      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -13,87 +15,99 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      # 1. 深度扩容磁盘空间（为 Armbian 编译腾出 60GB+ 空间）
+      - name: Maximize build disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 2048
+          swap-size-mb: 1024
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      # 2. 检出当前存储库（获取 userpatches 等）
+      - name: 检出存储库
         uses: actions/checkout@v4
 
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          echo "Disk space after cleanup:"
-          df -h
-
-      - name: Checkout Armbian Build Framework
+      # 3. 检出 Armbian 构建框架
+      - name: 检出 Armbian 构建框架
         uses: actions/checkout@v4
         with:
           repository: armbian/build
           path: build
 
-      - name: Prepare Userpatches & Run Armbian Build (Edge / Latest Kernel)
+      # 4. 准备用户补丁并运行 Armbian 构建
+      - name: 准备用户补丁并运行 Armbian 构建
         run: |
+          # 复制用户自定义补丁到 Armbian 源码目录
+          if [ -d "userpatches" ]; then
+            cp -r userpatches build/
+            chmod +x build/userpatches/customize-image.sh || true
+          fi
+          
           cd build
-          cp -r ../userpatches .
-          chmod +x userpatches/customize-image.sh
-
-          # 执行 Armbian 源码构建
-          # BRANCH=current 使用最新内核
-          # BUILD_MINIMAL=yes (轻量系统 + customize-image.sh 预装 docker)
+          
+          # 执行 Armbian 镜像编译
+          # BRANCH: current (稳定 LTS) / edge (最新开发内核)
+          # RELEASE: trixie (Debian 13) / bookworm (Debian 12)
           sudo ./compile.sh \
             BOARD=vontar-h618 \
             BRANCH=current \
             RELEASE=trixie \
             BUILD_DESKTOP=no \
             BUILD_MINIMAL=yes \
-            KERNEL_CONFIGURE=no \
-            IGNORE_EXCEPTIONS=yes
+            KERNEL_CONFIGURE=no
 
-      - name: Inspect and Compress Built Images
+      # 5. 检查与压缩构建出的镜像
+      - name: 检查和压缩已构建镜像
         run: |
           set -x
           mkdir -p release_files
-          echo "=== Output Images ==="
+          
+          echo "=== 检查输出文件 ==="
           sudo ls -la build/output/images/ || true
-
-          # 修好属主，避免 root 拥有目录导致 Permission denied
-          sudo chown -R "$(id -u):$(id -g)" build/output/images/
-
+          
+          # 修改文件所有权，避免 root 权限问题
+          sudo chown -R "$(id -u):$(id -g)" build/output/images/ || true
+          
           cd build/output/images/
           for img in *.img; do
             if [ -f "$img" ]; then
-              echo "Compressing $img with gzip..."
+              echo "正在压缩 $img..."
               gzip -9 -v "$img"
             fi
           done
-
-          # 搬运所有产物（压缩镜像 + sha + txt 说明）到工作区
-          cp -v *.img.gz *.img.sha *.img.txt ../../../release_files/ 2>/dev/null || true
+          
+          # 拷贝编译结果（压缩镜像、校验码、文本说明）到发布文件夹
+          cp -v *.img.gz *.sha *.txt ../../../release_files/ 2>/dev/null || true
           cd ../../../
+          
           echo "=== release_files ==="
           ls -la release_files/
 
-      - name: Upload Artifact
+      # 6. 上传 Artifact 构建产物
+      - name: 上传工件
         uses: actions/upload-artifact@v4
         with:
-          name: Armbian_Vontar_H618_Edge_Docker
+          name: Armbian_Vontar_H618_Current
           path: release_files/*
 
-      - name: Create Release on Tag / Dispatch
+      # 7. 发布 GitHub Release（当推送 Tag 或手动触发时）
+      - name: 创建 GitHub Release
         if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
-          name: "Vontar H618 Armbian Current LTS (Latest Kernel + Docker)"
+          name: "Vontar H618 Armbian Current LTS（最新内核 + Docker）"
           tag_name: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
           body: |
-            ## Vontar H618 Custom Armbian Image (Edge Branch)
-            - **Kernel Branch**: `edge` (Latest Linux Kernel)
-            - **Pre-installed**: Docker & Docker Compose (`docker.io`, `docker-compose-v2`)
-            - **U-Boot & Board Patch**: Project U-Boot for Vontar H618 (sun50i-h618-vontar-h618.dtb)
-            - **Features**: NEC IR Remote Keymap, Restored sunxi-gmac LAN driver, eMMC Dual-boot Android support preserved
-            - **Boot Method**: microSD boot + USB HDD / microSD rootfs
+            ## Vontar H618 自定义 Armbian 镜像
+            - **内核分支**：`current`
+            - **发行版**：Debian Trixie
+            - **系统类型**：Minimal (轻量版)
+            - **硬件适配**：Vontar H618 (Allwinner H618)
           draft: false
           prerelease: false
         env:
