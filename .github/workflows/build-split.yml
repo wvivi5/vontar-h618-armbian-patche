@@ -87,26 +87,58 @@ jobs:
           repository: armbian/build
           path: build
 
-      - name: Build rootfs artifact
+      - name: Build customized H618 image for rootfs extraction
         working-directory: build
         run: |
           set -euxo pipefail
           cp -r ../userpatches .
           chmod +x userpatches/customize-image.sh
 
-          sudo ./compile.sh rootfs \
+          sudo ./compile.sh \
             BOARD=vontar-h618 \
+            BRANCH=current \
             RELEASE=trixie \
             BUILD_MINIMAL=yes \
             BUILD_DESKTOP=no \
+            KERNEL_CONFIGURE=no \
             IGNORE_EXCEPTIONS=yes
 
-      - name: Collect 2b rootfs artifact
+      - name: Extract customized 2b rootfs without boot files
         run: |
           set -euxo pipefail
           mkdir -p split_files
-          find build -type f -name 'rootfs-*.tar.zst' -exec cp -v {} split_files/ \;
-          test -n "$(find split_files -type f -name 'rootfs-*.tar.zst' -print -quit)"
+
+          image="$(find build/output/images -maxdepth 2 -type f -name '*.img' -print -quit)"
+          test -n "$image"
+
+          loop="$(sudo losetup --find --show --partscan "$image")"
+          mount_dir="$(mktemp -d)"
+          cleanup() {
+            sudo umount "$mount_dir" 2>/dev/null || true
+            sudo losetup -d "$loop" 2>/dev/null || true
+            rmdir "$mount_dir" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          root_partition="$(lsblk -lnpo NAME,FSTYPE "$loop" | awk '$2 == "ext4" { print $1; exit }')"
+          test -n "$root_partition"
+          sudo mount -o ro "$root_partition" "$mount_dir"
+
+          # Reject a generic Armbian cache: 2b must contain project customization.
+          test -x "$mount_dir/usr/bin/docker"
+          test -x "$mount_dir/usr/local/sbin/vontar-h618-migrate-rootfs"
+          test -f "$mount_dir/etc/systemd/system/vontar-h618-migrate.service"
+
+          sudo tar \
+            --numeric-owner \
+            --xattrs \
+            --acls \
+            --one-file-system \
+            --exclude='./boot/*' \
+            -C "$mount_dir" \
+            -cf - . | zstd -19 -T0 -o split_files/Vontar_H618_2b_Custom_Rootfs_NoBoot.tar.zst
+
+          test -s split_files/Vontar_H618_2b_Custom_Rootfs_NoBoot.tar.zst
           sha256sum split_files/* > split_files/SHA256SUMS-2b-Rootfs
 
       - name: Upload 2b artifact
