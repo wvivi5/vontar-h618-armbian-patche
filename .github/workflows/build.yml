@@ -1,7 +1,7 @@
 name: 构建 Vontar H618 Armbian 镜像
 
 on:
-  push:
+  workflow_dispatch:
     branches:
       - main
     tags:
