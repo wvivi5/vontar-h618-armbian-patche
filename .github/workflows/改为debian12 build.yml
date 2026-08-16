@@ -50,13 +50,14 @@ jobs:
           cd build
 
           # 执行 Armbian 镜像编译
-          # RELEASE 已替换为 bookworm (Debian 12 稳定版)
+          # RELEASE=bookworm (Debian 12 稳定版)
+          # BUILD_MINIMAL=no (完整版，保留网卡驱动与固件，防止缺失 PHY 模块)
           sudo ./compile.sh \
             BOARD=vontar-h618 \
             BRANCH=current \
             RELEASE=bookworm \
             BUILD_DESKTOP=no \
-            BUILD_MINIMAL=yes \
+            BUILD_MINIMAL=no \
             KERNEL_CONFIGURE=no
 
       # 5. 检查与压缩构建出的镜像
@@ -88,7 +89,7 @@ jobs:
       - name: 上传工件
         uses: actions/upload-artifact@v4
         with:
-          name: Armbian_Vontar_H618_Current
+          name: Armbian_Vontar_H618_Full
           path: release_files/*
 
       # 7. 发布 GitHub Release（当推送 Tag 或手动触发时）
@@ -97,13 +98,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release_files/*
-          name: "Vontar H618 Armbian Current LTS（最新内核 + Docker）"
+          name: "Vontar H618 Armbian Full（带驱动 + Docker）"
           tag_name: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
           body: |
             ## Vontar H618 自定义 Armbian 镜像
             - **内核分支**：`current`
             - **发行版**：Debian Bookworm (12)
-            - **系统类型**：Minimal (轻量版)
+            - **系统类型**：Standard Full (完整驱动版)
             - **硬件适配**：Vontar H618 (Allwinner H618)
           draft: false
           prerelease: false
